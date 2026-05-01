@@ -89,9 +89,25 @@ db.exec(`
 `);
 
 // Safe migrations
+try { db.exec(`ALTER TABLE word_lists ADD COLUMN child_id INTEGER REFERENCES children(id)`); } catch(e) {}
 try { db.exec(`ALTER TABLE word_lists ADD COLUMN teacher_id INTEGER REFERENCES teachers(id)`); } catch(e) {}
 try { db.exec(`ALTER TABLE test_results ADD COLUMN child_id INTEGER REFERENCES children(id)`); } catch(e) {}
-try { db.exec(`ALTER TABLE test_results ADD COLUMN correct INTEGER NOT NULL DEFAULT 0`); } catch(e) {}
+try { db.exec(`ALTER TABLE test_results ADD COLUMN correct INTEGER DEFAULT 0`); } catch(e) {}
+
+// Backfill child_id on old word_lists rows that are missing it
+db.exec(`
+  UPDATE word_lists SET child_id = (
+    SELECT child_id FROM test_results WHERE list_id = word_lists.id LIMIT 1
+  ) WHERE child_id IS NULL
+`);
+// If still null, link to the first child of the first parent (legacy single-child setup)
+const firstChild = db.prepare(`SELECT id FROM children LIMIT 1`).get();
+if (firstChild) {
+  db.exec(`UPDATE word_lists SET child_id = ${firstChild.id} WHERE child_id IS NULL`);
+  db.exec(`UPDATE test_results SET child_id = (
+    SELECT child_id FROM word_lists WHERE id = test_results.list_id
+  ) WHERE child_id IS NULL`);
+}
 
 // Seed a default parent if none exist
 const parentCount = db.prepare(`SELECT COUNT(*) as c FROM parents`).get().c;
