@@ -6,7 +6,7 @@
   <title>SpellCast 🪄</title>
   <link rel="stylesheet" href="/style.css">
 </head>
-<body class="home-page">
+<body class="home-page" data-theme="purple">
   <div class="stars"></div>
   <div class="home-container">
     <div class="logo-area">
@@ -15,20 +15,33 @@
       <p class="subtitle">Magic Spelling Practice</p>
     </div>
 
-    <div id="greeting" class="greeting"></div>
-    <div id="week-label" class="week-label"></div>
+    <!-- Child selector -->
+    <div id="child-select-area" class="hidden">
+      <p class="who-prompt">Who's spelling today?</p>
+      <div id="child-cards" class="child-cards"></div>
+    </div>
 
-    <div class="home-buttons">
-      <a href="/practice" class="btn btn-practice">
-        <span class="btn-icon">✨</span>
-        Practice Spells
-        <span class="btn-sub">Learn your words</span>
-      </a>
-      <a href="/test" class="btn btn-test">
-        <span class="btn-icon">⭐</span>
-        Spelling Quest
-        <span class="btn-sub">Take the test!</span>
-      </a>
+    <!-- Single child or after selection -->
+    <div id="play-area" class="hidden">
+      <div id="greeting" class="greeting"></div>
+      <div id="week-label" class="week-label"></div>
+      <div class="home-buttons">
+        <a id="practice-link" href="/practice" class="btn btn-practice">
+          <span class="btn-icon">✨</span>
+          Practice Spells
+          <span class="btn-sub">Learn your words</span>
+        </a>
+        <a id="test-link" href="/test" class="btn btn-test">
+          <span class="btn-icon">⭐</span>
+          Spelling Quest
+          <span class="btn-sub">Take the test!</span>
+        </a>
+      </div>
+    </div>
+
+    <div id="no-words" class="hidden no-words-msg">
+      <p>⏳ Waiting for spelling words!</p>
+      <p class="small">Ask your parent to add this week's words.</p>
     </div>
 
     <div class="admin-link-area">
@@ -37,18 +50,61 @@
   </div>
 
   <script>
-    fetch('/api/active-list')
-      .then(r => r.json())
-      .then(list => {
-        if (!list) {
-          document.getElementById('greeting').textContent = 'Waiting for your spelling words!';
-          return;
+    let selectedChildId = localStorage.getItem('spellcast_child_id');
+
+    async function init() {
+      const res = await fetch('/api/children');
+      const children = await res.json();
+
+      if (children.length === 0) {
+        document.getElementById('no-words').classList.remove('hidden');
+        return;
+      }
+
+      if (children.length === 1) {
+        // Only one child, auto-select
+        selectChild(children[0].id, children);
+      } else {
+        // Show child picker
+        const area = document.getElementById('child-select-area');
+        area.classList.remove('hidden');
+        const cards = document.getElementById('child-cards');
+        for (const child of children) {
+          const btn = document.createElement('button');
+          btn.className = 'child-card';
+          btn.innerHTML = `<div class="child-avatar">${child.avatar}</div><div class="child-name">${child.name}</div>`;
+          btn.onclick = () => selectChild(child.id, children);
+          cards.appendChild(btn);
         }
-        document.getElementById('greeting').textContent = `Hi, ${list.child_name}! 🌟`;
-        document.getElementById('week-label').textContent = `This week: ${list.week_label}`;
-        // Apply theme
-        document.body.dataset.theme = list.app_theme || 'purple';
-      });
+      }
+    }
+
+    async function selectChild(childId, children) {
+      localStorage.setItem('spellcast_child_id', childId);
+      const child = children ? children.find(c => c.id == childId) : null;
+
+      document.getElementById('child-select-area').classList.add('hidden');
+
+      const res = await fetch(`/api/child/${childId}/active-list`);
+      const list = await res.json();
+
+      document.body.dataset.theme = (child || list?.child)?.theme || 'purple';
+
+      const name = child?.name || list?.child?.name || 'Spellcaster';
+      document.getElementById('greeting').textContent = `Hi, ${name}! 🌟`;
+
+      if (!list) {
+        document.getElementById('no-words').classList.remove('hidden');
+        return;
+      }
+
+      document.getElementById('week-label').textContent = `This week: ${list.week_label}`;
+      document.getElementById('practice-link').href = `/practice?child=${childId}`;
+      document.getElementById('test-link').href = `/test?child=${childId}`;
+      document.getElementById('play-area').classList.remove('hidden');
+    }
+
+    init();
   </script>
 </body>
 </html>

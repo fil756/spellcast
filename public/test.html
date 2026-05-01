@@ -8,48 +8,33 @@
 </head>
 <body class="test-page">
   <div class="stars"></div>
-
   <header class="game-header">
     <a href="/" class="back-btn">← Home</a>
     <div class="header-title">⭐ Spelling Quest</div>
-    <div id="timer-display" class="timer-display"></div>
+    <div id="timer-display"></div>
   </header>
-
   <div class="game-container">
     <div id="loading" class="loading-message">Preparing your quest... 🪄</div>
-
     <div id="intro-area" class="hidden intro-area">
       <div class="intro-emoji">⭐</div>
       <h2>Ready for the Spelling Quest?</h2>
-      <p>You'll be tested on all <strong id="word-count"></strong> words.<br>
-         Listen to each word and type it correctly.</p>
-      <p class="intro-tip">💡 Tip: Press Enter to move to the next word!</p>
+      <p>You'll be tested on all <strong id="word-count"></strong> words.<br>Listen and type each one!</p>
+      <p class="intro-tip">💡 Press Enter to move to the next word!</p>
       <button onclick="startTest()" class="btn btn-test big-btn">Start Quest! ⭐</button>
     </div>
-
     <div id="test-area" class="hidden">
-      <div class="progress-bar-wrap">
-        <div class="progress-bar" id="progress-bar"></div>
-      </div>
+      <div class="progress-bar-wrap"><div class="progress-bar" id="progress-bar"></div></div>
       <div class="word-counter" id="word-counter">Word 1 of 20</div>
-
       <div class="spell-card">
-        <div class="spell-card-inner">
-          <p class="listen-prompt">👂 Listen and spell the word...</p>
-          <button class="btn-speak" id="speak-btn" onclick="speakWord()">
-            🔊 Hear Word Again
-          </button>
-        </div>
+        <p class="listen-prompt">👂 Listen and spell the word...</p>
+        <button class="btn-speak" onclick="speakWord()">🔊 Hear Word Again</button>
       </div>
-
       <div class="input-area">
-        <input type="text" id="spell-input" class="spell-input"
-               placeholder="Type the word here..." autocomplete="off"
-               autocorrect="off" autocapitalize="none" spellcheck="false">
+        <input type="text" id="spell-input" class="spell-input" placeholder="Type the word here..."
+               autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
         <button class="btn-check" onclick="submitAnswer()">Submit ✓</button>
       </div>
     </div>
-
     <div id="results-area" class="hidden results-area">
       <div id="trophy" class="trophy-display"></div>
       <h2 id="results-title"></h2>
@@ -59,29 +44,27 @@
       </div>
       <div class="results-breakdown" id="results-breakdown"></div>
       <div id="word-review" class="word-review"></div>
+      <div id="notify-msg" class="notify-msg hidden">📬 Results sent to your parent!</div>
       <div class="complete-buttons">
-        <a href="/practice" class="btn btn-practice">Practice More ✨</a>
+        <a id="practice-link" href="/practice" class="btn btn-practice">Practice More ✨</a>
         <button onclick="location.reload()" class="btn btn-test">Try Again ⭐</button>
       </div>
     </div>
   </div>
-
   <script>
-    let words = [];
-    let answers = [];
-    let currentIndex = 0;
-    let listId = null;
+    const childId = new URLSearchParams(location.search).get('child') || localStorage.getItem('spellcast_child_id');
+    let words = [], answers = [], currentIndex = 0, listId = null;
 
     async function loadWords() {
-      const res = await fetch('/api/active-list');
+      const res = await fetch(`/api/child/${childId}/active-list`);
       const list = await res.json();
       if (!list || !list.words.length) {
         document.getElementById('loading').textContent = 'No words yet! Ask your parent to add some. 🪄';
         return;
       }
-      document.body.dataset.theme = list.app_theme || 'purple';
+      document.body.dataset.theme = list.child?.theme || 'purple';
+      document.getElementById('practice-link').href = `/practice?child=${childId}`;
       listId = list.id;
-      // Shuffle words for test
       words = [...list.words].sort(() => Math.random() - 0.5);
       document.getElementById('word-count').textContent = words.length;
       document.getElementById('loading').classList.add('hidden');
@@ -89,54 +72,34 @@
     }
 
     function startTest() {
-      answers = [];
-      currentIndex = 0;
+      answers = []; currentIndex = 0;
       document.getElementById('intro-area').classList.add('hidden');
       document.getElementById('test-area').classList.remove('hidden');
       showWord();
     }
 
     function showWord() {
-      const word = words[currentIndex];
-      document.getElementById('word-counter').textContent = 
-        `Word ${currentIndex + 1} of ${words.length}`;
-      const pct = (currentIndex / words.length) * 100;
-      document.getElementById('progress-bar').style.width = pct + '%';
+      document.getElementById('word-counter').textContent = `Word ${currentIndex+1} of ${words.length}`;
+      document.getElementById('progress-bar').style.width = (currentIndex/words.length*100)+'%';
       document.getElementById('spell-input').value = '';
       document.getElementById('spell-input').focus();
       setTimeout(() => speakWord(), 400);
     }
 
     function speakWord() {
-      const word = words[currentIndex];
-      if (!word) return;
-      const utter = new SpeechSynthesisUtterance(word.word);
-      utter.rate = 0.85;
-      utter.pitch = 1.1;
-      speechSynthesis.speak(utter);
+      const word = words[currentIndex]; if(!word) return;
+      const u = new SpeechSynthesisUtterance(word.word);
+      u.rate = 0.85; u.pitch = 1.1; speechSynthesis.speak(u);
     }
 
     function submitAnswer() {
       const input = document.getElementById('spell-input').value.trim().toLowerCase();
       if (!input) { speakWord(); return; }
-
       const word = words[currentIndex];
-      const isCorrect = input === word.word;
-
-      answers.push({
-        word_id: word.id,
-        word: word.word,
-        given: input,
-        correct: isCorrect
-      });
-
+      answers.push({ word_id: word.id, word: word.word, given: input, correct: input === word.word });
       currentIndex++;
-
-      if (currentIndex >= words.length) {
-        showResults();
-      } else {
-        showWord();
-      }
+      if (currentIndex >= words.length) showResults();
+      else showWord();
     }
 
     async function showResults() {
@@ -146,60 +109,51 @@
       const res = await fetch('/api/results', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ list_id: listId, answers })
+        body: JSON.stringify({ list_id: listId, child_id: parseInt(childId), answers })
       });
       const result = await res.json();
-
       const score = result.score;
+
       document.getElementById('score-number').textContent = score;
 
       let trophy, title;
-      if (score === 100) { trophy = '🏆'; title = 'PERFECT! You\'re a Spelling Wizard!'; }
-      else if (score >= 90) { trophy = '🥇'; title = 'Outstanding! Almost perfect!'; }
-      else if (score >= 80) { trophy = '🥈'; title = 'Great job! Keep it up!'; }
-      else if (score >= 70) { trophy = '🥉'; title = 'Good effort! Practice makes perfect!'; }
-      else { trophy = '💪'; title = 'Keep practicing! You\'ve got this!'; }
+      if (score===100) { trophy='🏆'; title='PERFECT! You\'re a Spelling Wizard!'; }
+      else if (score>=90) { trophy='🥇'; title='Outstanding! Almost perfect!'; }
+      else if (score>=80) { trophy='🥈'; title='Great job! Keep it up!'; }
+      else if (score>=70) { trophy='🥉'; title='Good effort! Practice makes perfect!'; }
+      else { trophy='💪'; title='Keep practicing! You\'ve got this!'; }
 
       document.getElementById('trophy').textContent = trophy;
       document.getElementById('results-title').textContent = title;
-      document.getElementById('results-breakdown').textContent = 
-        `${result.correct} correct out of ${result.total} words`;
+      document.getElementById('results-breakdown').textContent = `${result.correct} correct out of ${result.total} words`;
 
-      // Word review
       const review = document.getElementById('word-review');
       review.innerHTML = '<h3>Word Review:</h3>';
       for (const a of answers) {
         const div = document.createElement('div');
-        div.className = 'review-item ' + (a.correct ? 'correct' : 'incorrect');
-        div.innerHTML = a.correct 
-          ? `✅ <strong>${a.word}</strong>`
-          : `❌ <strong>${a.word}</strong> <span class="you-wrote">(you wrote: "${a.given}")</span>`;
+        div.className = 'review-item ' + (a.correct?'correct':'incorrect');
+        div.innerHTML = a.correct ? `✅ <strong>${a.word}</strong>` : `❌ <strong>${a.word}</strong> <span class="you-wrote">(you wrote: "${a.given}")</span>`;
         review.appendChild(div);
       }
 
-      // Confetti for good scores
-      if (score >= 80) showConfetti(score === 100 ? 20 : 10);
+      document.getElementById('notify-msg').classList.remove('hidden');
+      if (score >= 80) showConfetti(score===100?20:10);
     }
 
-    function showConfetti(count = 10) {
-      const emojis = ['⭐','✨','🌟','🪄','💫','🎉','🏆'];
-      for (let i = 0; i < count; i++) {
-        setTimeout(() => {
-          const el = document.createElement('div');
-          el.className = 'confetti-piece';
-          el.textContent = emojis[Math.floor(Math.random() * emojis.length)];
-          el.style.left = Math.random() * 100 + 'vw';
-          el.style.animationDuration = (Math.random() * 1.5 + 0.5) + 's';
-          document.body.appendChild(el);
-          setTimeout(() => el.remove(), 3000);
-        }, i * 150);
+    function showConfetti(count=10) {
+      const emojis=['⭐','✨','🌟','🪄','💫','🎉','🏆'];
+      for(let i=0;i<count;i++) {
+        setTimeout(()=>{
+          const el=document.createElement('div'); el.className='confetti-piece';
+          el.textContent=emojis[Math.floor(Math.random()*emojis.length)];
+          el.style.left=Math.random()*100+'vw'; el.style.animationDuration=(Math.random()*1.5+0.5)+'s';
+          document.body.appendChild(el); setTimeout(()=>el.remove(),3000);
+        },i*150);
       }
     }
 
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !document.getElementById('test-area').classList.contains('hidden')) {
-        submitAnswer();
-      }
+    document.addEventListener('keydown', e => {
+      if (e.key==='Enter' && !document.getElementById('test-area').classList.contains('hidden')) submitAnswer();
     });
 
     loadWords();

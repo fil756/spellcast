@@ -1,7 +1,7 @@
 {
   "name": "spellcast",
-  "version": "1.0.0",
-  "description": "Spelling practice app for kids",
+  "version": "2.0.0",
+  "description": "Magic spelling practice app for kids",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -9,6 +9,7 @@
   "dependencies": {
     "express": "^4.18.2",
     "better-sqlite3": "^9.4.3",
-    "express-session": "^1.17.3"
+    "express-session": "^1.17.3",
+    "nodemailer": "^6.9.9"
   }
 }
