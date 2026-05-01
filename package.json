@@ -1,0 +1,14 @@
+{
+  "name": "spellcast",
+  "version": "1.0.0",
+  "description": "Spelling practice app for kids",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "better-sqlite3": "^9.4.3",
+    "express-session": "^1.17.3"
+  }
+}

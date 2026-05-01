@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SpellCast 🪄</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="home-page">
+  <div class="stars"></div>
+  <div class="home-container">
+    <div class="logo-area">
+      <div class="magic-wand">🪄</div>
+      <h1 class="app-title">SpellCast</h1>
+      <p class="subtitle">Magic Spelling Practice</p>
+    </div>
+
+    <div id="greeting" class="greeting"></div>
+    <div id="week-label" class="week-label"></div>
+
+    <div class="home-buttons">
+      <a href="/practice" class="btn btn-practice">
+        <span class="btn-icon">✨</span>
+        Practice Spells
+        <span class="btn-sub">Learn your words</span>
+      </a>
+      <a href="/test" class="btn btn-test">
+        <span class="btn-icon">⭐</span>
+        Spelling Quest
+        <span class="btn-sub">Take the test!</span>
+      </a>
+    </div>
+
+    <div class="admin-link-area">
+      <a href="/admin" class="admin-link">Parent Dashboard</a>
+    </div>
+  </div>
+
+  <script>
+    fetch('/api/active-list')
+      .then(r => r.json())
+      .then(list => {
+        if (!list) {
+          document.getElementById('greeting').textContent = 'Waiting for your spelling words!';
+          return;
+        }
+        document.getElementById('greeting').textContent = `Hi, ${list.child_name}! 🌟`;
+        document.getElementById('week-label').textContent = `This week: ${list.week_label}`;
+        // Apply theme
+        document.body.dataset.theme = list.app_theme || 'purple';
+      });
+  </script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SpellCast – Parent Login</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="admin-page">
+  <div class="admin-login-container">
+    <div class="login-card">
+      <div class="login-logo">🪄</div>
+      <h2>Parent Dashboard</h2>
+      <p>Enter your PIN to continue</p>
+      <form action="/admin/login" method="POST">
+        <input type="password" name="pin" class="pin-input" 
+               placeholder="Enter PIN" maxlength="10" autofocus
+               inputmode="numeric">
+        <button type="submit" class="btn btn-admin-login">Unlock 🔓</button>
+      </form>
+      <div id="error-msg" class="error-msg" style="display:none">
+        ❌ Incorrect PIN. Try again.
+      </div>
+      <a href="/" class="back-link">← Back to SpellCast</a>
+    </div>
+  </div>
+  <script>
+    if (window.location.search.includes('error=1')) {
+      document.getElementById('error-msg').style.display = 'block';
+    }
+  </script>
+</body>
+</html>

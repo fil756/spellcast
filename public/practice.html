@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SpellCast – Practice ✨</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="practice-page">
+  <div class="stars"></div>
+
+  <header class="game-header">
+    <a href="/" class="back-btn">← Home</a>
+    <div class="header-title">✨ Practice Spells</div>
+    <div class="streak-display">🔥 <span id="streak">0</span></div>
+  </header>
+
+  <div class="game-container">
+    <div id="loading" class="loading-message">Loading your spell words... 🪄</div>
+
+    <div id="practice-area" class="hidden">
+      <div class="progress-bar-wrap">
+        <div class="progress-bar" id="progress-bar"></div>
+      </div>
+      <div class="word-counter" id="word-counter"></div>
+
+      <div class="spell-card">
+        <div class="spell-card-inner">
+          <p class="listen-prompt">👂 Listen carefully...</p>
+          <button class="btn-speak" id="speak-btn" onclick="speakWord()">
+            🔊 Hear the Word
+          </button>
+          <div class="hint-area" id="hint-area"></div>
+        </div>
+      </div>
+
+      <div class="input-area">
+        <input type="text" id="spell-input" class="spell-input" 
+               placeholder="Type the word here..." autocomplete="off" 
+               autocorrect="off" autocapitalize="none" spellcheck="false">
+        <button class="btn-check" onclick="checkAnswer()">Cast Spell ✨</button>
+      </div>
+
+      <div id="feedback" class="feedback hidden"></div>
+      <button id="next-btn" class="btn-next hidden" onclick="nextWord()">Next Word →</button>
+    </div>
+
+    <div id="complete-area" class="hidden complete-area">
+      <div class="complete-emoji">🏆</div>
+      <h2>Practice Complete!</h2>
+      <p id="complete-message"></p>
+      <div class="complete-stats" id="complete-stats"></div>
+      <div class="complete-buttons">
+        <button onclick="startPractice()" class="btn btn-practice">Practice Again ✨</button>
+        <a href="/test" class="btn btn-test">Take the Test ⭐</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let words = [];
+    let queue = [];
+    let currentWord = null;
+    let correct = 0;
+    let total = 0;
+    let streak = 0;
+    let listId = null;
+
+    async function loadWords() {
+      const res = await fetch('/api/active-list');
+      const list = await res.json();
+      if (!list || !list.words.length) {
+        document.getElementById('loading').textContent = 'No words yet! Ask your parent to add some. 🪄';
+        return;
+      }
+      document.body.dataset.theme = list.app_theme || 'purple';
+      listId = list.id;
+      words = list.words;
+      startPractice();
+    }
+
+    function buildWeightedQueue() {
+      const q = [];
+      for (const w of words) {
+        const weight = 1 + Math.min(w.miss_count, 3); // max 4x weight
+        for (let i = 0; i < weight; i++) q.push(w);
+      }
+      // Shuffle
+      for (let i = q.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [q[i], q[j]] = [q[j], q[i]];
+      }
+      return q;
+    }
+
+    function startPractice() {
+      queue = buildWeightedQueue();
+      correct = 0;
+      total = 0;
+      streak = 0;
+      updateStreak();
+      document.getElementById('loading').classList.add('hidden');
+      document.getElementById('complete-area').classList.add('hidden');
+      document.getElementById('practice-area').classList.remove('hidden');
+      nextWord();
+    }
+
+    function nextWord() {
+      if (queue.length === 0) {
+        showComplete();
+        return;
+      }
+      currentWord = queue.shift();
+      total++;
+      updateProgress();
+      document.getElementById('spell-input').value = '';
+      document.getElementById('feedback').classList.add('hidden');
+      document.getElementById('next-btn').classList.add('hidden');
+      document.getElementById('hint-area').textContent = '';
+      document.getElementById('spell-input').focus();
+      document.getElementById('word-counter').textContent = `Word ${total} of ${queue.length + total}`;
+      setTimeout(() => speakWord(), 300);
+    }
+
+    function speakWord() {
+      if (!currentWord) return;
+      const utter = new SpeechSynthesisUtterance(currentWord.word);
+      utter.rate = 0.85;
+      utter.pitch = 1.1;
+      speechSynthesis.speak(utter);
+    }
+
+    function checkAnswer() {
+      const input = document.getElementById('spell-input').value.trim().toLowerCase();
+      if (!input) return;
+
+      const feedback = document.getElementById('feedback');
+      const nextBtn = document.getElementById('next-btn');
+
+      if (input === currentWord.word) {
+        correct++;
+        streak++;
+        updateStreak();
+        feedback.className = 'feedback correct';
+        feedback.innerHTML = getCorrectMessage() + ` <strong>${currentWord.word}</strong> ✅`;
+        showConfetti();
+      } else {
+        streak = 0;
+        updateStreak();
+        feedback.className = 'feedback incorrect';
+        feedback.innerHTML = `Almost! The word is <strong>${currentWord.word}</strong> ❌<br>
+          <small>You wrote: "${input}"</small>`;
+        document.getElementById('hint-area').textContent = `📝 Study it: ${currentWord.word}`;
+      }
+
+      feedback.classList.remove('hidden');
+      nextBtn.classList.remove('hidden');
+    }
+
+    function getCorrectMessage() {
+      const msgs = ['Amazing!', 'Spectacular!', 'You\'re a wizard!', 'Brilliant!', 'Magical!', 'Perfect!'];
+      return msgs[Math.floor(Math.random() * msgs.length)];
+    }
+
+    function updateStreak() {
+      document.getElementById('streak').textContent = streak;
+    }
+
+    function updateProgress() {
+      const pct = ((total - 1) / (queue.length + total)) * 100;
+      document.getElementById('progress-bar').style.width = pct + '%';
+    }
+
+    function showComplete() {
+      document.getElementById('practice-area').classList.add('hidden');
+      const area = document.getElementById('complete-area');
+      area.classList.remove('hidden');
+      const pct = Math.round((correct / total) * 100);
+      document.getElementById('complete-message').textContent = 
+        pct === 100 ? '🌟 Perfect score! You\'re a SpellCast master!' :
+        pct >= 80 ? '⭐ Great job! You\'re almost there!' :
+        '💪 Good effort! Keep practicing!';
+      document.getElementById('complete-stats').innerHTML = 
+        `Got <strong>${correct}</strong> out of <strong>${total}</strong> correct (${pct}%)`;
+    }
+
+    function showConfetti() {
+      const emojis = ['⭐','✨','🌟','🪄','💫'];
+      for (let i = 0; i < 8; i++) {
+        setTimeout(() => {
+          const el = document.createElement('div');
+          el.className = 'confetti-piece';
+          el.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+          el.style.left = Math.random() * 100 + 'vw';
+          el.style.animationDuration = (Math.random() * 1 + 0.5) + 's';
+          document.body.appendChild(el);
+          setTimeout(() => el.remove(), 2000);
+        }, i * 80);
+      }
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        if (!document.getElementById('next-btn').classList.contains('hidden')) {
+          nextWord();
+        } else {
+          checkAnswer();
+        }
+      }
+    });
+
+    loadWords();
+  </script>
+</body>
+</html>
