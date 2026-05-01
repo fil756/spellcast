@@ -64,7 +64,32 @@ db.exec(`
     FOREIGN KEY (list_id) REFERENCES word_lists(id),
     FOREIGN KEY (child_id) REFERENCES children(id)
   );
+
+  CREATE TABLE IF NOT EXISTS teachers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    email TEXT,
+    class_name TEXT NOT NULL,
+    class_code TEXT NOT NULL UNIQUE,
+    pin TEXT NOT NULL DEFAULT '0000',
+    notify_email INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS class_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    child_id INTEGER NOT NULL,
+    teacher_id INTEGER NOT NULL,
+    joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(child_id, teacher_id),
+    FOREIGN KEY (child_id) REFERENCES children(id),
+    FOREIGN KEY (teacher_id) REFERENCES teachers(id)
+  );
+
 `);
+
+// Safe migrations
+try { db.exec(`ALTER TABLE word_lists ADD COLUMN teacher_id INTEGER REFERENCES teachers(id)`); } catch(e) {}
 
 // Seed a default parent if none exist
 const parentCount = db.prepare(`SELECT COUNT(*) as c FROM parents`).get().c;
@@ -254,6 +279,143 @@ app.get('/api/admin/results', requireAdmin, (req, res) => {
     ORDER BY r.taken_at DESC LIMIT 100
   `).all(req.session.parentId);
   res.json(results);
+});
+
+// ─── TEACHER ROUTES ─────────────────────────────────────────────
+const requireTeacher = (req, res, next) => {
+  if (req.session.teacherId) return next();
+  res.redirect('/teacher/login');
+};
+
+app.get('/teacher/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'teacher-login.html')));
+app.get('/teacher/logout', (req, res) => { req.session.destroy(); res.redirect('/teacher/login'); });
+app.get('/teacher', requireTeacher, (req, res) => res.sendFile(path.join(__dirname, 'public', 'teacher.html')));
+
+app.post('/teacher/login', (req, res) => {
+  const { pin } = req.body;
+  const teacher = db.prepare(`SELECT * FROM teachers WHERE pin = ?`).get(pin);
+  if (teacher) {
+    req.session.teacherId = teacher.id;
+    res.redirect('/teacher');
+  } else {
+    res.redirect('/teacher/login?error=1');
+  }
+});
+
+// Register a new teacher
+app.post('/api/teacher/register', (req, res) => {
+  const { name, email, class_name, class_code, pin } = req.body;
+  if (!name || !class_name || !class_code || !pin) return res.status(400).json({ error: 'Missing fields' });
+  const existing = db.prepare(`SELECT id FROM teachers WHERE class_code = ?`).get(class_code.toUpperCase());
+  if (existing) return res.status(409).json({ error: 'Class code already taken' });
+  const t = db.prepare(`INSERT INTO teachers (name, email, class_name, class_code, pin) VALUES (?,?,?,?,?)`)
+    .run(name, email||null, class_name, class_code.toUpperCase(), pin);
+  req.session.teacherId = t.lastInsertRowid;
+  res.json({ success: true, class_code: class_code.toUpperCase() });
+});
+
+// Teacher: get their profile + students
+app.get('/api/teacher/me', requireTeacher, (req, res) => {
+  const teacher = db.prepare(`SELECT id,name,email,class_name,class_code,notify_email FROM teachers WHERE id=?`).get(req.session.teacherId);
+  const students = db.prepare(`
+    SELECT c.*, p.name as parent_name, p.email as parent_email,
+           (SELECT COUNT(*) FROM test_results r WHERE r.child_id=c.id) as test_count,
+           (SELECT r.score FROM test_results r WHERE r.child_id=c.id ORDER BY r.taken_at DESC LIMIT 1) as last_score
+    FROM children c
+    JOIN class_subscriptions cs ON cs.child_id = c.id
+    JOIN parents p ON p.id = c.parent_id
+    WHERE cs.teacher_id = ?
+    ORDER BY c.name
+  `).all(req.session.teacherId);
+  res.json({ teacher, students });
+});
+
+// Teacher: save settings
+app.post('/api/teacher/settings', requireTeacher, (req, res) => {
+  const { name, email, class_name, pin, notify_email } = req.body;
+  db.prepare(`UPDATE teachers SET name=COALESCE(?,name), email=?, class_name=COALESCE(?,class_name), pin=COALESCE(NULLIF(?,pin),pin), notify_email=? WHERE id=?`)
+    .run(name||null, email||null, class_name||null, pin||null, notify_email?1:0, req.session.teacherId);
+  res.json({ success: true });
+});
+
+// Teacher: push word list to all subscribed children
+app.post('/api/teacher/push-list', requireTeacher, (req, res) => {
+  const { week_label, words } = req.body;
+  if (!week_label || !words?.length) return res.status(400).json({ error: 'Missing data' });
+
+  const students = db.prepare(`SELECT child_id FROM class_subscriptions WHERE teacher_id=?`).all(req.session.teacherId);
+  if (!students.length) return res.status(400).json({ error: 'No students in class' });
+
+  let created = 0;
+  for (const { child_id } of students) {
+    const list = db.prepare(`INSERT INTO word_lists (child_id, week_label, teacher_id) VALUES (?,?,?)`)
+      .run(child_id, week_label, req.session.teacherId);
+    for (const w of words.slice(0,20)) {
+      db.prepare(`INSERT INTO words (list_id, word) VALUES (?,?)`).run(list.lastInsertRowid, w.trim().toLowerCase());
+    }
+    created++;
+  }
+  res.json({ success: true, students_updated: created });
+});
+
+// Teacher: class grade report
+app.get('/api/teacher/grades', requireTeacher, (req, res) => {
+  const results = db.prepare(`
+    SELECT r.*, c.name as child_name, c.avatar, w.week_label, w.teacher_id
+    FROM test_results r
+    JOIN children c ON r.child_id = c.id
+    JOIN word_lists w ON r.list_id = w.id
+    JOIN class_subscriptions cs ON cs.child_id = c.id
+    WHERE cs.teacher_id = ?
+    ORDER BY r.taken_at DESC LIMIT 200
+  `).all(req.session.teacherId);
+
+  // Most missed words across the class
+  const missedWords = db.prepare(`
+    SELECT wo.word, SUM(wo.miss_count) as total_misses
+    FROM words wo
+    JOIN word_lists wl ON wo.list_id = wl.id
+    JOIN class_subscriptions cs ON cs.child_id = wl.child_id
+    WHERE cs.teacher_id = ? AND wo.miss_count > 0
+    GROUP BY wo.word ORDER BY total_misses DESC LIMIT 10
+  `).all(req.session.teacherId);
+
+  res.json({ results, missedWords });
+});
+
+// Parent: join a class by code
+app.post('/api/admin/join-class', requireAdmin, (req, res) => {
+  const { class_code, child_id } = req.body;
+  const child = db.prepare(`SELECT * FROM children WHERE id=? AND parent_id=?`).get(child_id, req.session.parentId);
+  if (!child) return res.status(403).json({ error: 'Not your child' });
+  const teacher = db.prepare(`SELECT * FROM teachers WHERE class_code=?`).get(class_code.toUpperCase());
+  if (!teacher) return res.status(404).json({ error: 'Class code not found' });
+  try {
+    db.prepare(`INSERT INTO class_subscriptions (child_id, teacher_id) VALUES (?,?)`).run(child_id, teacher.id);
+    res.json({ success: true, class_name: teacher.class_name, teacher_name: teacher.name });
+  } catch(e) {
+    res.status(409).json({ error: 'Already enrolled in this class' });
+  }
+});
+
+// Parent: get enrolled classes for a child
+app.get('/api/admin/classes/:child_id', requireAdmin, (req, res) => {
+  const child = db.prepare(`SELECT * FROM children WHERE id=? AND parent_id=?`).get(req.params.child_id, req.session.parentId);
+  if (!child) return res.status(403).json({ error: 'Not your child' });
+  const classes = db.prepare(`
+    SELECT t.id, t.name as teacher_name, t.class_name, t.class_code
+    FROM teachers t JOIN class_subscriptions cs ON cs.teacher_id = t.id
+    WHERE cs.child_id = ?
+  `).all(req.params.child_id);
+  res.json(classes);
+});
+
+// Parent: leave a class
+app.delete('/api/admin/classes/:teacher_id/:child_id', requireAdmin, (req, res) => {
+  const child = db.prepare(`SELECT * FROM children WHERE id=? AND parent_id=?`).get(req.params.child_id, req.session.parentId);
+  if (!child) return res.status(403).json({ error: 'Not your child' });
+  db.prepare(`DELETE FROM class_subscriptions WHERE teacher_id=? AND child_id=?`).run(req.params.teacher_id, req.params.child_id);
+  res.json({ success: true });
 });
 
 // ─── PUBLIC API ──────────────────────────────────────────────────

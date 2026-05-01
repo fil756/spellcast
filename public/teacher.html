@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SpellCast – Teacher Dashboard</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="admin-page">
+  <header class="admin-header">
+    <div class="admin-logo">🎓 SpellCast</div>
+    <div class="admin-nav">
+      <button onclick="showTab('roster')" class="tab-btn active" id="tab-roster">👧 Roster</button>
+      <button onclick="showTab('words')" class="tab-btn" id="tab-words">📚 Push Words</button>
+      <button onclick="showTab('grades')" class="tab-btn" id="tab-grades">📊 Grades</button>
+      <button onclick="showTab('settings')" class="tab-btn" id="tab-settings">⚙️ Settings</button>
+      <a href="/teacher/logout" class="logout-btn">Logout</a>
+    </div>
+  </header>
+
+  <div class="admin-container">
+
+    <!-- TAB: Roster -->
+    <div id="tab-content-roster" class="tab-content">
+      <div class="teacher-class-banner" id="class-banner">
+        <div>
+          <div id="class-title" class="class-title"></div>
+          <div id="class-code-display" class="class-code-display"></div>
+        </div>
+        <div class="share-code">
+          <p>Share this code with parents:</p>
+          <div class="code-box" id="code-box" onclick="copyCode()">
+            <span id="code-text"></span>
+            <span class="copy-hint">tap to copy</span>
+          </div>
+        </div>
+      </div>
+
+      <h2 style="margin-bottom:0.75rem;">Class Roster</h2>
+      <div id="roster-list" class="history-list">Loading...</div>
+    </div>
+
+    <!-- TAB: Push Words -->
+    <div id="tab-content-words" class="tab-content hidden">
+      <h2>Push Spelling Words to Class</h2>
+      <p style="color:#64748b;margin-bottom:1.5rem;">Enter this week's words and send them to all enrolled students at once.</p>
+
+      <div class="week-form-card">
+        <div class="form-row">
+          <label>Week Label</label>
+          <input type="text" id="week-label" placeholder="e.g. Week of May 5" class="admin-input">
+        </div>
+        <div class="words-grid" id="words-grid"></div>
+        <div id="word-warnings" class="word-warnings hidden"></div>
+        <p class="words-note">📝 Words saved as lowercase. Spell check on!</p>
+        <button onclick="pushWords()" class="btn btn-admin-save">🚀 Push to All Students</button>
+        <div id="push-message" class="save-message hidden"></div>
+      </div>
+    </div>
+
+    <!-- TAB: Grades -->
+    <div id="tab-content-grades" class="tab-content hidden">
+      <h2>Class Grades</h2>
+
+      <div class="missed-words-panel" id="missed-panel" style="display:none">
+        <h3>🔴 Most Missed Words This Week</h3>
+        <div id="missed-words-list" class="missed-words"></div>
+      </div>
+
+      <h3 style="margin:1.5rem 0 0.75rem;">All Test Results</h3>
+      <div id="grades-list" class="history-list">Loading...</div>
+    </div>
+
+    <!-- TAB: Settings -->
+    <div id="tab-content-settings" class="tab-content hidden">
+      <h2>Teacher Settings</h2>
+      <div class="settings-card">
+        <div class="form-row">
+          <label>Your Name</label>
+          <input type="text" id="setting-name" class="admin-input">
+        </div>
+        <div class="form-row">
+          <label>Class Name</label>
+          <input type="text" id="setting-class-name" class="admin-input">
+        </div>
+        <div class="form-row">
+          <label>Email</label>
+          <input type="email" id="setting-email" class="admin-input">
+        </div>
+        <div class="form-row">
+          <label>New PIN</label>
+          <input type="password" id="setting-pin" class="admin-input" placeholder="Leave blank to keep current">
+        </div>
+        <div class="form-row">
+          <label>Email grades</label>
+          <label class="toggle-label"><input type="checkbox" id="notify-email"> Email me when students complete tests</label>
+        </div>
+        <button onclick="saveSettings()" class="btn btn-admin-save">💾 Save Settings</button>
+        <div id="settings-message" class="save-message hidden"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let teacherData = {};
+
+    // Build 20 word inputs
+    const grid = document.getElementById('words-grid');
+    for (let i = 1; i <= 20; i++) {
+      const div = document.createElement('div');
+      div.className = 'word-input-wrap';
+      div.innerHTML = `<span class="word-num">${i}.</span>
+        <input type="text" class="word-input" id="word-${i}" placeholder="Word ${i}"
+               autocomplete="off" spellcheck="true" lang="en">`;
+      grid.appendChild(div);
+    }
+
+    async function loadData() {
+      const res = await fetch('/api/teacher/me');
+      const data = await res.json();
+      teacherData = data;
+      const t = data.teacher;
+
+      document.getElementById('class-title').textContent = `${t.class_name}`;
+      document.getElementById('class-code-display').textContent = `Teacher: ${t.name}`;
+      document.getElementById('code-text').textContent = t.class_code;
+      document.getElementById('code-box').dataset.code = t.class_code;
+
+      const roster = document.getElementById('roster-list');
+      if (!data.students.length) {
+        roster.innerHTML = `<div class="empty-msg">No students yet. Share your class code <strong>${t.class_code}</strong> with parents!</div>`;
+        return;
+      }
+      roster.innerHTML = '';
+      for (const s of data.students) {
+        const grade = s.last_score!=null ? (s.last_score>=90?'A':s.last_score>=80?'B':s.last_score>=70?'C':s.last_score>=60?'D':'F') : '–';
+        const gradeClass = s.last_score>=80?'grade-good':s.last_score>=70?'grade-ok':s.last_score!=null?'grade-low':'';
+        const div = document.createElement('div');
+        div.className = 'history-item';
+        div.innerHTML = `
+          <div><strong>${s.avatar} ${s.name}</strong><div style="color:#64748b;font-size:0.8rem;">${s.parent_name}${s.parent_email?' · '+s.parent_email:''}</div></div>
+          <div style="color:#64748b;font-size:0.85rem;">${s.test_count} test${s.test_count!==1?'s':''} taken</div>
+          <div class="history-grade ${gradeClass}">${grade}${s.last_score!=null?' ('+s.last_score+'%)':''}</div>`;
+        roster.appendChild(div);
+      }
+    }
+
+    function copyCode() {
+      const code = document.getElementById('code-box').dataset.code;
+      navigator.clipboard.writeText(code).then(() => {
+        document.querySelector('.copy-hint').textContent = '✅ copied!';
+        setTimeout(() => document.querySelector('.copy-hint').textContent = 'tap to copy', 2000);
+      });
+    }
+
+    async function pushWords() {
+      const weekLabel = document.getElementById('week-label').value.trim();
+      if (!weekLabel) { alert('Please enter a week label!'); return; }
+      const words = [];
+      for (let i = 1; i <= 20; i++) {
+        const val = document.getElementById('word-'+i).value.trim();
+        if (val) words.push(val);
+      }
+      if (!words.length) { alert('Please enter at least one word!'); return; }
+
+      const warnings = [];
+      const seen = new Set();
+      for (const w of words) {
+        if (/[^a-z\-']/.test(w)) warnings.push(`"${w}" has unusual characters`);
+        if (seen.has(w)) warnings.push(`"${w}" is duplicated`);
+        seen.add(w);
+      }
+      if (warnings.length && !confirm('Issues found:\n\n' + warnings.join('\n') + '\n\nPush anyway?')) return;
+
+      const res = await fetch('/api/teacher/push-list', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ week_label: weekLabel, words })
+      });
+      const data = await res.json();
+      const msg = document.getElementById('push-message');
+      msg.className = 'save-message ' + (data.success?'success':'error');
+      msg.textContent = data.success ? `🚀 Pushed ${words.length} words to ${data.students_updated} students!` : '❌ ' + (data.error||'Error');
+      msg.classList.remove('hidden');
+      setTimeout(() => msg.classList.add('hidden'), 4000);
+    }
+
+    async function loadGrades() {
+      const res = await fetch('/api/teacher/grades');
+      const data = await res.json();
+
+      // Missed words
+      if (data.missedWords.length) {
+        const panel = document.getElementById('missed-panel');
+        panel.style.display = 'block';
+        const list = document.getElementById('missed-words-list');
+        list.innerHTML = '';
+        for (const w of data.missedWords) {
+          const div = document.createElement('div');
+          div.className = 'missed-word-chip';
+          div.innerHTML = `<strong>${w.word}</strong><span class="miss-badge">${w.total_misses}x</span>`;
+          list.appendChild(div);
+        }
+      }
+
+      const grades = document.getElementById('grades-list');
+      if (!data.results.length) { grades.innerHTML = '<p class="empty-msg">No tests taken yet!</p>'; return; }
+      grades.innerHTML = '';
+      for (const r of data.results) {
+        const grade = r.score>=90?'A':r.score>=80?'B':r.score>=70?'C':r.score>=60?'D':'F';
+        const gradeClass = r.score>=80?'grade-good':r.score>=70?'grade-ok':'grade-low';
+        const date = new Date(r.taken_at).toLocaleDateString();
+        const div = document.createElement('div');
+        div.className = 'history-item';
+        div.innerHTML = `
+          <div><strong>${r.avatar} ${r.child_name}</strong><div class="history-week">${r.week_label}</div></div>
+          <div class="history-date">${date}</div>
+          <div class="history-score">${r.correct}/${r.total} words</div>
+          <div class="history-grade ${gradeClass}">${grade} (${r.score}%)</div>`;
+        grades.appendChild(div);
+      }
+    }
+
+    async function loadSettings() {
+      const data = teacherData.teacher || (await (await fetch('/api/teacher/me')).json()).teacher;
+      document.getElementById('setting-name').value = data.name || '';
+      document.getElementById('setting-class-name').value = data.class_name || '';
+      document.getElementById('setting-email').value = data.email || '';
+      document.getElementById('notify-email').checked = !!data.notify_email;
+    }
+
+    async function saveSettings() {
+      const res = await fetch('/api/teacher/settings', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          name: document.getElementById('setting-name').value,
+          class_name: document.getElementById('setting-class-name').value,
+          email: document.getElementById('setting-email').value,
+          pin: document.getElementById('setting-pin').value || undefined,
+          notify_email: document.getElementById('notify-email').checked,
+        })
+      });
+      const data = await res.json();
+      const msg = document.getElementById('settings-message');
+      msg.className = 'save-message ' + (data.success?'success':'error');
+      msg.textContent = data.success ? '✅ Settings saved!' : '❌ Error.';
+      msg.classList.remove('hidden');
+      setTimeout(() => msg.classList.add('hidden'), 3000);
+    }
+
+    function showTab(tab) {
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('tab-content-'+tab).classList.remove('hidden');
+      document.getElementById('tab-'+tab).classList.add('active');
+      if (tab==='grades') loadGrades();
+      if (tab==='settings') loadSettings();
+    }
+
+    loadData();
+  </script>
+</body>
+</html>

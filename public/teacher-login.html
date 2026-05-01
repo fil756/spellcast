@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SpellCast – Teacher Login</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="admin-page">
+  <div class="admin-login-container">
+    <div class="login-card">
+      <div class="login-logo">🎓</div>
+      <h2>Teacher Portal</h2>
+
+      <div id="login-form">
+        <p>Enter your teacher PIN</p>
+        <form action="/teacher/login" method="POST">
+          <input type="password" name="pin" class="pin-input" placeholder="Enter PIN" maxlength="20" autofocus>
+          <button type="submit" class="btn btn-admin-login">Login 🔓</button>
+        </form>
+        <div id="error-msg" class="error-msg" style="display:none">❌ Incorrect PIN. Try again.</div>
+        <hr style="border-color:#334155;margin:1.5rem 0;">
+        <p style="color:#64748b;font-size:0.85rem;">New teacher? <button onclick="showRegister()" style="background:none;border:none;color:#a855f7;cursor:pointer;font-size:0.85rem;">Create an account →</button></p>
+      </div>
+
+      <div id="register-form" style="display:none">
+        <p>Create your teacher account</p>
+        <input type="text" id="reg-name" class="pin-input" placeholder="Your name" style="letter-spacing:normal;margin-bottom:0.75rem;text-align:left;">
+        <input type="text" id="reg-class-name" class="pin-input" placeholder="Class name (e.g. Mrs. Smith's 2nd Grade)" style="letter-spacing:normal;margin-bottom:0.75rem;text-align:left;">
+        <input type="text" id="reg-class-code" class="pin-input" placeholder="Class code (e.g. SMITH2A)" style="margin-bottom:0.75rem;" maxlength="12">
+        <input type="email" id="reg-email" class="pin-input" placeholder="Your email (optional)" style="letter-spacing:normal;margin-bottom:0.75rem;text-align:left;">
+        <input type="password" id="reg-pin" class="pin-input" placeholder="Set a PIN" style="margin-bottom:0.75rem;">
+        <button onclick="register()" class="btn btn-admin-login">Create Account 🎓</button>
+        <div id="reg-error" class="error-msg" style="display:none"></div>
+        <p style="margin-top:1rem;"><button onclick="showLogin()" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:0.85rem;">← Back to login</button></p>
+      </div>
+
+      <a href="/" class="back-link">← Back to SpellCast</a>
+    </div>
+  </div>
+  <script>
+    if (location.search.includes('error=1')) document.getElementById('error-msg').style.display = 'block';
+    function showRegister() { document.getElementById('login-form').style.display='none'; document.getElementById('register-form').style.display='block'; }
+    function showLogin() { document.getElementById('register-form').style.display='none'; document.getElementById('login-form').style.display='block'; }
+
+    async function register() {
+      const name = document.getElementById('reg-name').value.trim();
+      const class_name = document.getElementById('reg-class-name').value.trim();
+      const class_code = document.getElementById('reg-class-code').value.trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+      const email = document.getElementById('reg-email').value.trim();
+      const pin = document.getElementById('reg-pin').value;
+      const errEl = document.getElementById('reg-error');
+
+      if (!name || !class_name || !class_code || !pin) { errEl.textContent='❌ Please fill all required fields.'; errEl.style.display='block'; return; }
+      if (class_code.length < 4) { errEl.textContent='❌ Class code must be at least 4 characters.'; errEl.style.display='block'; return; }
+
+      const res = await fetch('/api/teacher/register', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ name, class_name, class_code, email, pin })
+      });
+      const data = await res.json();
+      if (data.success) {
+        location.href = '/teacher';
+      } else {
+        errEl.textContent = '❌ ' + (data.error || 'Registration failed');
+        errEl.style.display = 'block';
+      }
+    }
+  </script>
+</body>
+</html>

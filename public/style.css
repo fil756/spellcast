@@ -203,6 +203,21 @@ body { background: var(--bg1); }
 .avatar-btn:hover, .avatar-btn.selected { border-color: #7c3aed; background: rgba(124,58,237,0.2); }
 .toggle-label { display: flex; align-items: center; gap: 0.4rem; color: #94a3b8; font-size: 0.85rem; white-space: nowrap; }
 
+/* ─── TEACHER ─────────────────────────────────────── */
+.teacher-class-banner { background: linear-gradient(135deg, #1e1065, #4c1d95); border: 1px solid #7c3aed; border-radius: 1rem; padding: 1.5rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
+.class-title { font-size: 1.4rem; font-weight: 800; color: #e2e8f0; }
+.class-code-display { color: #94a3b8; font-size: 0.9rem; margin-top: 0.25rem; }
+.share-code { text-align: center; }
+.share-code p { color: #94a3b8; font-size: 0.8rem; margin-bottom: 0.5rem; }
+.code-box { background: rgba(0,0,0,0.4); border: 2px dashed #7c3aed; border-radius: 0.75rem; padding: 0.75rem 1.5rem; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 0.2rem; transition: all 0.2s; }
+.code-box:hover { background: rgba(124,58,237,0.2); }
+.code-box span:first-child { font-size: 1.8rem; font-weight: 800; letter-spacing: 0.15em; color: #a855f7; font-family: monospace; }
+.copy-hint { font-size: 0.7rem; color: #64748b; }
+.missed-words-panel { background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.3); border-radius: 1rem; padding: 1.25rem; margin-bottom: 1.5rem; }
+.missed-words-panel h3 { color: #f87171; margin-bottom: 0.75rem; }
+.missed-words { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.missed-word-chip { background: rgba(248,113,113,0.15); border: 1px solid rgba(248,113,113,0.3); color: #f87171; border-radius: 100px; padding: 0.3rem 0.8rem; font-size: 0.9rem; display: flex; align-items: center; gap: 0.4rem; }
+
 /* ─── RESPONSIVE ─────────────────────────────────── */
 @media (max-width: 600px) {
   .app-title { font-size: 2.5rem; }

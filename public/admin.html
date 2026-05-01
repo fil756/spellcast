@@ -12,6 +12,7 @@
     <div class="admin-nav">
       <button onclick="showTab('words')" class="tab-btn active" id="tab-words">📚 Words</button>
       <button onclick="showTab('children')" class="tab-btn" id="tab-children">👧 Children</button>
+      <button onclick="showTab('classes')" class="tab-btn" id="tab-classes">🎓 Classes</button>
       <button onclick="showTab('history')" class="tab-btn" id="tab-history">📊 Grades</button>
       <button onclick="showTab('settings')" class="tab-btn" id="tab-settings">⚙️ Settings</button>
       <a href="/admin/logout" class="logout-btn">Logout</a>
@@ -77,6 +78,28 @@
         <button onclick="addChild()" class="btn btn-admin-save">➕ Add Child</button>
         <div id="child-message" class="save-message hidden"></div>
       </div>
+    </div>
+
+    <!-- TAB: Classes -->
+    <div id="tab-content-classes" class="tab-content hidden">
+      <h2>Teacher Classes</h2>
+      <p style="color:#64748b;margin-bottom:1.5rem;">Enroll your child in a teacher's class. The teacher will push spelling words directly to them each week.</p>
+
+      <div class="week-form-card">
+        <h3>Join a Class</h3>
+        <div class="form-row">
+          <label>Child</label>
+          <select id="class-child-select" class="admin-input"></select>
+        </div>
+        <div class="form-row">
+          <label>Class Code</label>
+          <input type="text" id="class-code-input" class="admin-input" placeholder="e.g. SMITH2A" style="text-transform:uppercase">
+        </div>
+        <button onclick="joinClass()" class="btn btn-admin-save">➕ Join Class</button>
+        <div id="join-message" class="save-message hidden"></div>
+      </div>
+
+      <div id="enrolled-classes" style="margin-top:1.5rem;"></div>
     </div>
 
     <!-- TAB: History -->
@@ -370,6 +393,48 @@
       setTimeout(() => msg.classList.add('hidden'), 3000);
     }
 
+    async function joinClass() {
+      const childId = document.getElementById('class-child-select').value;
+      const code = document.getElementById('class-code-input').value.trim().toUpperCase();
+      if (!code) { alert('Enter a class code!'); return; }
+      const res = await fetch('/api/admin/join-class', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ child_id: parseInt(childId), class_code: code })
+      });
+      const data = await res.json();
+      const msg = document.getElementById('join-message');
+      msg.className = 'save-message ' + (data.success?'success':'error');
+      msg.textContent = data.success ? `✅ Joined "${data.class_name}" with ${data.teacher_name}!` : '❌ ' + (data.error||'Error');
+      msg.classList.remove('hidden');
+      setTimeout(() => msg.classList.add('hidden'), 4000);
+      if (data.success) loadEnrolledClasses();
+    }
+
+    async function loadEnrolledClasses() {
+      const childId = document.getElementById('class-child-select')?.value;
+      if (!childId) return;
+      const child = children.find(c => c.id == childId);
+      const res = await fetch(`/api/admin/classes/${childId}`);
+      const classes = await res.json();
+      const container = document.getElementById('enrolled-classes');
+      if (!classes.length) { container.innerHTML = `<p class="empty-msg">${child?.name || 'This child'} isn't enrolled in any classes yet.</p>`; return; }
+      container.innerHTML = `<h3 style="margin-bottom:0.75rem;">${child?.avatar||''} ${child?.name||''}'s Classes</h3>`;
+      for (const c of classes) {
+        const div = document.createElement('div');
+        div.className = 'history-item';
+        div.innerHTML = `
+          <div><strong>${c.class_name}</strong><div style="color:#64748b;font-size:0.8rem;">Teacher: ${c.teacher_name} · Code: ${c.class_code}</div></div>
+          <button onclick="leaveClass(${c.id},${childId},'${c.class_name}')" class="btn-sm btn-delete">Leave</button>`;
+        container.appendChild(div);
+      }
+    }
+
+    async function leaveClass(teacherId, childId, className) {
+      if (!confirm(`Remove from "${className}"?`)) return;
+      await fetch(`/api/admin/classes/${teacherId}/${childId}`, { method: 'DELETE' });
+      loadEnrolledClasses();
+    }
+
     function showTab(tab) {
       document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -378,6 +443,18 @@
       if (tab==='history') loadHistory();
       if (tab==='settings') loadSettings();
       if (tab==='children') loadChildren();
+      if (tab==='classes') {
+        // Populate child select for classes tab
+        const sel = document.getElementById('class-child-select');
+        sel.innerHTML = '';
+        for (const c of children) {
+          const opt = document.createElement('option');
+          opt.value = c.id; opt.textContent = `${c.avatar} ${c.name}`;
+          sel.appendChild(opt);
+        }
+        sel.onchange = loadEnrolledClasses;
+        loadEnrolledClasses();
+      }
     }
 
     loadData();
