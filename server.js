@@ -90,6 +90,8 @@ db.exec(`
 
 // Safe migrations
 try { db.exec(`ALTER TABLE word_lists ADD COLUMN teacher_id INTEGER REFERENCES teachers(id)`); } catch(e) {}
+try { db.exec(`ALTER TABLE test_results ADD COLUMN child_id INTEGER REFERENCES children(id)`); } catch(e) {}
+try { db.exec(`ALTER TABLE test_results ADD COLUMN correct INTEGER NOT NULL DEFAULT 0`); } catch(e) {}
 
 // Seed a default parent if none exist
 const parentCount = db.prepare(`SELECT COUNT(*) as c FROM parents`).get().c;
@@ -273,7 +275,7 @@ app.get('/api/admin/results', requireAdmin, (req, res) => {
   const results = db.prepare(`
     SELECT r.*, c.name as child_name, w.week_label 
     FROM test_results r
-    JOIN children c ON r.child_id = c.id
+    JOIN word_lists wl2 ON r.list_id = wl2.id JOIN children c ON wl2.child_id = c.id
     JOIN word_lists w ON r.list_id = w.id
     WHERE c.parent_id = ?
     ORDER BY r.taken_at DESC LIMIT 100
@@ -319,8 +321,8 @@ app.get('/api/teacher/me', requireTeacher, (req, res) => {
   const teacher = db.prepare(`SELECT id,name,email,class_name,class_code,notify_email FROM teachers WHERE id=?`).get(req.session.teacherId);
   const students = db.prepare(`
     SELECT c.*, p.name as parent_name, p.email as parent_email,
-           (SELECT COUNT(*) FROM test_results r WHERE r.child_id=c.id) as test_count,
-           (SELECT r.score FROM test_results r WHERE r.child_id=c.id ORDER BY r.taken_at DESC LIMIT 1) as last_score
+           (SELECT COUNT(*) FROM test_results r JOIN word_lists wl ON r.list_id=wl.id WHERE wl.child_id=c.id) as test_count,
+           (SELECT r.score FROM test_results r JOIN word_lists wl ON r.list_id=wl.id WHERE wl.child_id=c.id ORDER BY r.taken_at DESC LIMIT 1) as last_score
     FROM children c
     JOIN class_subscriptions cs ON cs.child_id = c.id
     JOIN parents p ON p.id = c.parent_id
@@ -361,10 +363,10 @@ app.post('/api/teacher/push-list', requireTeacher, (req, res) => {
 // Teacher: class grade report
 app.get('/api/teacher/grades', requireTeacher, (req, res) => {
   const results = db.prepare(`
-    SELECT r.*, c.name as child_name, c.avatar, w.week_label, w.teacher_id
+    SELECT r.*, c.name as child_name, c.avatar, wl.week_label, wl.teacher_id
     FROM test_results r
-    JOIN children c ON r.child_id = c.id
-    JOIN word_lists w ON r.list_id = w.id
+    JOIN word_lists wl ON r.list_id = wl.id
+    JOIN children c ON wl.child_id = c.id
     JOIN class_subscriptions cs ON cs.child_id = c.id
     WHERE cs.teacher_id = ?
     ORDER BY r.taken_at DESC LIMIT 200
