@@ -173,6 +173,8 @@ body { background: var(--bg1); }
 .grade-low { color: #f87171; }
 .empty-msg { color: #64748b; text-align: center; padding: 2rem; }
 .preview-link { margin-top: 1.5rem; }
+.words-note { color: #64748b; font-size: 0.8rem; margin-bottom: 0.75rem; }
+.word-warnings { background: rgba(251,191,36,0.15); border: 1px solid rgba(251,191,36,0.3); color: #fbbf24; border-radius: 0.5rem; padding: 0.6rem 1rem; font-size: 0.85rem; margin-bottom: 0.75rem; display: flex; flex-wrap: wrap; gap: 0.5rem; }
 
 /* ─── RESPONSIVE ─────────────────────────────────── */
 @media (max-width: 600px) {
