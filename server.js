@@ -276,6 +276,21 @@ app.post('/api/admin/lists', requireAdmin, (req, res) => {
   res.json({ success: true, list_id: list.lastInsertRowid });
 });
 
+// Update existing list words
+app.put('/api/admin/lists/:list_id', requireAdmin, (req, res) => {
+  const { words, week_label } = req.body;
+  const list = db.prepare(`
+    SELECT wl.* FROM word_lists wl JOIN children c ON wl.child_id=c.id
+    WHERE wl.id=? AND c.parent_id=?`).get(req.params.list_id, req.session.parentId);
+  if (!list) return res.status(403).json({ error: 'Not found' });
+  db.prepare(`DELETE FROM words WHERE list_id=?`).run(list.id);
+  for (const w of (words||[]).slice(0,20)) {
+    db.prepare(`INSERT INTO words (list_id,word) VALUES (?,?)`).run(list.id, w.trim());
+  }
+  if (week_label) db.prepare(`UPDATE word_lists SET week_label=? WHERE id=?`).run(week_label, list.id);
+  res.json({ success: true });
+});
+
 app.get('/api/admin/lists/:child_id', requireAdmin, (req, res) => {
   const child = db.prepare(`SELECT * FROM children WHERE id=? AND parent_id=?`).get(req.params.child_id, req.session.parentId);
   if (!child) return res.status(403).json({ error: 'Not your child' });

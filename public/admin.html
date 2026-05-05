@@ -41,7 +41,9 @@
       </div>
 
       <div class="current-list-card" id="current-list-card" style="display:none">
-        <h3>📋 Current Active List — <span id="active-child-name"></span></h3>
+        <h3>📋 Current Active List — <span id="active-child-name"></span>
+          <button onclick="editCurrentList()" class="btn btn-sm" style="margin-left:1rem;font-size:0.8rem;padding:0.3rem 0.8rem;">✏️ Edit</button>
+        </h3>
         <div id="current-list-words"></div>
         <div class="miss-legend">
           <span>✅ No misses</span>
@@ -216,11 +218,15 @@
       sel.onchange = () => { selectedChildId = sel.value; loadCurrentList(selectedChildId); };
     }
 
+    let currentListId = null;
+    let editingListId = null;
+
     async function loadCurrentList(childId) {
       const res = await fetch(`/api/admin/lists/${childId}`);
       const lists = await res.json();
       if (!lists.length) { document.getElementById('current-list-card').style.display = 'none'; return; }
       const list = lists[0];
+      currentListId = list.id;
       const child = children.find(c => c.id == childId);
       document.getElementById('active-child-name').textContent = child ? `${child.avatar} ${child.name}` : '';
       document.getElementById('current-list-card').style.display = 'block';
@@ -235,6 +241,34 @@
         wordGrid.appendChild(div);
       }
       container.appendChild(wordGrid);
+    }
+
+    async function editCurrentList() {
+      if (!currentListId) return;
+      const childId = document.getElementById('word-child-select').value;
+      const res = await fetch(`/api/admin/lists/${childId}`);
+      const lists = await res.json();
+      const list = lists[0];
+      if (!list) return;
+      editingListId = list.id;
+      // Load week label
+      document.getElementById('week-label').value = list.week_label;
+      // Load words into inputs
+      for (let i = 1; i <= 20; i++) {
+        const w = list.words[i-1];
+        document.getElementById('word-'+i).value = w ? w.word : '';
+      }
+      // Update button to show we're editing
+      const btn = document.querySelector('button[onclick="saveWords()"]');
+      btn.textContent = '💾 Update Word List';
+      btn.style.background = '#f59e0b';
+      // Scroll to form
+      document.querySelector('.week-form-card').scrollIntoView({ behavior: 'smooth' });
+      const msg = document.getElementById('save-message');
+      msg.className = 'save-message success';
+      msg.textContent = '✏️ Editing current list — make changes and save.';
+      msg.classList.remove('hidden');
+      setTimeout(() => msg.classList.add('hidden'), 4000);
     }
 
     async function saveWords() {
@@ -263,16 +297,29 @@
         if (!confirm('Issues found:\n\n' + warnings.join('\n') + '\n\nSave anyway?')) return;
       } else warnBox.classList.add('hidden');
 
-      const res = await fetch('/api/admin/lists', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ child_id: parseInt(childId), week_label: weekLabel, words })
-      });
+      let res;
+      if (editingListId) {
+        res = await fetch(`/api/admin/lists/${editingListId}`, {
+          method: 'PUT', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ week_label: weekLabel, words })
+        });
+      } else {
+        res = await fetch('/api/admin/lists', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ child_id: parseInt(childId), week_label: weekLabel, words })
+        });
+      }
       const data = await res.json();
       const msg = document.getElementById('save-message');
       msg.className = 'save-message ' + (data.success?'success':'error');
-      msg.textContent = data.success ? `✅ Saved ${words.length} words!` : '❌ Error saving.';
+      msg.textContent = data.success ? (editingListId ? `✅ Updated ${words.length} words!` : `✅ Saved ${words.length} words!`) : '❌ Error saving.';
       msg.classList.remove('hidden');
       setTimeout(() => msg.classList.add('hidden'), 3000);
+      // Reset edit mode
+      editingListId = null;
+      const btn = document.querySelector('button[onclick="saveWords()"]');
+      btn.textContent = '💾 Save This Week\'s Words';
+      btn.style.background = '';
       if (data.success) loadCurrentList(childId);
     }
 
