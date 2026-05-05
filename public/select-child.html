@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SpellCast – Who's Spelling?</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="home-page">
+  <div class="stars"></div>
+  <div class="container">
+    <div class="content">
+      <h1 class="page-title">Who's Spelling Today?</h1>
+      <p style="text-align:center;color:rgba(255,255,255,0.6);margin-bottom:2rem;">Select a child to get started</p>
+
+      <div id="children-grid" class="children-grid">
+        <div style="text-align:center;padding:2rem;color:rgba(255,255,255,0.5);">Loading...</div>
+      </div>
+
+      <div style="text-align:center;margin-top:2rem;">
+        <a href="/login" class="btn-secondary">← Back to Login</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const parentId = new URLSearchParams(location.search).get('parentId');
+    if (!parentId) window.location.href = '/login';
+
+    async function loadChildren() {
+      try {
+        const res = await fetch(`/api/public/parent-children?parentId=${parentId}`);
+        if (!res.ok) {
+          window.location.href = '/login';
+          return;
+        }
+        const children = await res.json();
+        const grid = document.getElementById('children-grid');
+
+        if (children.length === 0) {
+          grid.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:rgba(255,255,255,0.5);">No children set up yet. Contact your parent/teacher.</p>';
+          return;
+        }
+
+        grid.innerHTML = children.map(child => `
+          <div class="child-card" data-theme="${child.theme}" onclick="selectChild(${child.id})">
+            <div class="child-avatar">${child.avatar}</div>
+            <div class="child-name">${child.name}</div>
+            <div style="font-size:0.75rem;color:rgba(255,255,255,0.5);">Tap to start</div>
+          </div>
+        `).join('');
+      } catch (e) {
+        console.error('Failed to load children:', e);
+        document.getElementById('children-grid').innerHTML = '<p style="grid-column:1/-1;text-align:center;color:#f87171;">Error loading children</p>';
+      }
+    }
+
+    function selectChild(childId) {
+      // Store parent + child in session, redirect to home
+      fetch('/api/public/select-child', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parentId: parseInt(parentId), childId })
+      }).then(res => {
+        if (res.ok) window.location.href = '/';
+        else alert('Error selecting child');
+      });
+    }
+
+    loadChildren();
+  </script>
+</body>
+</html>

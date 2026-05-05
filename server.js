@@ -354,13 +354,61 @@ app.use(session({
 }));
 
 const requireAdmin = (req, res, next) => {
-  if (req.session.parentId) return next();
-  res.redirect('/admin/login');
+  if (req.session.parentId && req.session.childId) return next();
+  res.redirect('/login');
+};
+
+const requireTeacher = (req, res, next) => {
+  if (req.session.teacherId) return next();
+  res.redirect('/teacher/login');
 };
 
 // ─── AUTH ROUTES ─────────────────────────────────────────────────
+app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
+app.get('/select-child', (req, res) => res.sendFile(path.join(__dirname, 'public', 'select-child.html')));
 app.get('/register', (req, res) => res.sendFile(path.join(__dirname, 'public', 'register.html')));
 app.get('/admin/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin-login.html')));
+
+// ─── PUBLIC API (NO AUTH) ────────────────────────────────────────
+// Get all parents (public list for login dropdown)
+app.get('/api/public/parents', (req, res) => {
+  const parents = db.prepare(`SELECT id,name FROM parents ORDER BY name ASC`).all();
+  res.json(parents);
+});
+
+// Verify parent PIN
+app.post('/api/public/verify-pin', (req, res) => {
+  const { parentId, pin } = req.body;
+  if (!parentId || !pin) return res.status(400).json({ error: 'Missing parent or PIN' });
+
+  const parent = db.prepare(`SELECT id FROM parents WHERE id=? AND pin=?`).get(parentId, pin);
+  if (!parent) return res.status(401).json({ error: 'Invalid PIN' });
+
+  res.json({ parentId: parent.id });
+});
+
+// Get children for a parent (after PIN verify)
+app.get('/api/public/parent-children', (req, res) => {
+  const parentId = req.query.parentId;
+  if (!parentId) return res.status(400).json({ error: 'Missing parentId' });
+
+  const children = db.prepare(`SELECT id,name,avatar,theme FROM children WHERE parent_id=? ORDER BY name ASC`).all(parentId);
+  res.json(children);
+});
+
+// Select a child (stores in session)
+app.post('/api/public/select-child', (req, res) => {
+  const { parentId, childId } = req.body;
+  if (!parentId || !childId) return res.status(400).json({ error: 'Missing parentId or childId' });
+
+  // Verify child belongs to parent
+  const child = db.prepare(`SELECT id FROM children WHERE id=? AND parent_id=?`).get(childId, parentId);
+  if (!child) return res.status(401).json({ error: 'Child does not belong to parent' });
+
+  req.session.parentId = parentId;
+  req.session.childId = childId;
+  res.json({ success: true });
+});
 
 // Registration — creates parent account + sends magic link
 app.post('/api/auth/register', async (req, res) => {
@@ -440,18 +488,12 @@ app.get('/api/auth/verify/:token', (req, res) => {
   }
 });
 
+// Legacy admin login — redirect to new flow
 app.post('/admin/login', (req, res) => {
-  const { pin } = req.body;
-  const parent = db.prepare(`SELECT * FROM parents WHERE pin = ?`).get(pin);
-  if (parent) {
-    req.session.parentId = parent.id;
-    res.redirect('/admin');
-  } else {
-    res.redirect('/admin/login?error=1');
-  }
+  res.redirect('/login');
 });
 
-app.get('/admin/logout', (req, res) => { req.session.destroy(); res.redirect('/admin/login'); });
+app.get('/admin/logout', (req, res) => { req.session.destroy(); res.redirect('/login'); });
 app.get('/admin', requireAdmin, (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 
 // ─── ADMIN API ───────────────────────────────────────────────────
@@ -685,6 +727,31 @@ app.delete('/api/admin/classes/:teacher_id/:child_id', requireAdmin, (req, res) 
   if (!child) return res.status(403).json({ error: 'Not your child' });
   db.prepare(`DELETE FROM class_subscriptions WHERE teacher_id=? AND child_id=?`).run(req.params.teacher_id, req.params.child_id);
   res.json({ success: true });
+});
+
+// ─── SESSION MANAGEMENT ────────────────────────────────────────
+// Get current session child info
+app.get('/api/session-child', (req, res) => {
+  if (!req.session.parentId || !req.session.childId) {
+    return res.status(401).json({ error: 'Not logged in' });
+  }
+  const child = db.prepare(`SELECT * FROM children WHERE id=? AND parent_id=?`).get(req.session.childId, req.session.parentId);
+  if (!child) return res.status(401).json({ error: 'Invalid session' });
+  res.json({ childId: child.id, child });
+});
+
+// Get parent's children (authenticated endpoint)
+app.get('/api/parent-children', (req, res) => {
+  if (!req.session.parentId) return res.status(401).json({ error: 'Not logged in' });
+  const children = db.prepare(`SELECT id,name,avatar,theme FROM children WHERE parent_id=? ORDER BY name ASC`).all(req.session.parentId);
+  res.json(children);
+});
+
+// Logout
+app.post('/api/logout', (req, res) => {
+  req.session.destroy((err) => {
+    res.json({ success: true });
+  });
 });
 
 // ─── AUDIO ENDPOINT ─────────────────────────────────────────────

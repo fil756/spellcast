@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SpellCast – Login</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="login-page" data-theme="purple">
+  <div class="stars"></div>
+  <div class="login-container">
+    <div class="login-card">
+      <div class="login-logo">🪄</div>
+      <h1 class="login-title">SpellCast</h1>
+
+      <!-- Parent Selection & PIN Login -->
+      <div id="pin-area">
+        <p class="login-subtitle">Enter your PIN to continue</p>
+        <form onsubmit="handlePinSubmit(event)">
+          <div class="form-row">
+            <label style="display:block;text-align:left;color:rgba(255,255,255,0.7);font-size:0.85rem;margin-bottom:0.5rem;">Parent/Teacher</label>
+            <select id="parent-select" class="login-input" style="appearance:auto;cursor:pointer;" required>
+              <option value="">Loading parents...</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <input type="password" id="pin-input" class="login-input"
+                   placeholder="Enter PIN" maxlength="10" autofocus inputmode="numeric"
+                   style="text-align:center;letter-spacing:0.3em;font-size:1.5rem;" required>
+          </div>
+          <div id="pin-error" class="login-error hidden">❌ Incorrect PIN. Try again.</div>
+          <button type="submit" class="btn-login">Unlock 🔓</button>
+        </form>
+        <button onclick="showMagicLink()" class="forgot-pin-btn">Forgot PIN? Send me a magic link</button>
+      </div>
+
+      <!-- Magic Link Form -->
+      <div id="magic-area" class="hidden">
+        <p class="login-subtitle">Enter your email and we'll send you a sign-in link</p>
+        <div class="form-row">
+          <select id="magic-role" class="login-input" style="appearance:auto;cursor:pointer;">
+            <option value="parent">Parent</option>
+            <option value="teacher">Teacher</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <input type="email" id="magic-email" class="login-input" placeholder="your@email.com" autocomplete="email">
+        </div>
+        <div id="magic-error" class="login-error hidden"></div>
+        <div id="magic-success" class="hidden" style="background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3);border-radius:0.75rem;padding:1rem;text-align:center;color:#4ade80;margin-bottom:1rem;">
+          📬 Check your email for a sign-in link!
+        </div>
+        <button type="button" onclick="sendMagicLink()" class="btn-login" id="magic-btn">✨ Send Magic Link</button>
+        <button type="button" onclick="showPin()" class="forgot-pin-btn">← Back to PIN login</button>
+      </div>
+
+      <div style="margin-top:1.5rem;text-align:center;">
+        <a href="/register" style="color:var(--accent);font-size:0.85rem;text-decoration:none;">New here? Create an account</a>
+        &nbsp;·&nbsp;
+        <a href="/" style="color:rgba(255,255,255,0.4);font-size:0.85rem;text-decoration:none;">← Back to SpellCast</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let allParents = [];
+
+    async function loadParents() {
+      try {
+        const res = await fetch('/api/public/parents');
+        allParents = await res.json();
+        const select = document.getElementById('parent-select');
+        select.innerHTML = allParents.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+        if (allParents.length === 1) select.value = allParents[0].id;
+      } catch (e) {
+        console.error('Failed to load parents:', e);
+        document.getElementById('parent-select').innerHTML = '<option value="">Error loading parents</option>';
+      }
+    }
+
+    async function handlePinSubmit(event) {
+      event.preventDefault();
+      const parentId = document.getElementById('parent-select').value;
+      const pin = document.getElementById('pin-input').value;
+      const err = document.getElementById('pin-error');
+      err.classList.add('hidden');
+
+      if (!parentId) {
+        err.textContent = 'Please select a parent/teacher.';
+        err.classList.remove('hidden');
+        return;
+      }
+
+      const res = await fetch('/api/public/verify-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parentId: parseInt(parentId), pin })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        // Set parent session and redirect to child selection
+        window.location.href = `/select-child?parentId=${data.parentId}`;
+      } else {
+        err.textContent = '❌ Incorrect PIN. Try again.';
+        err.classList.remove('hidden');
+      }
+    }
+
+    function showMagicLink() {
+      document.getElementById('pin-area').classList.add('hidden');
+      document.getElementById('magic-area').classList.remove('hidden');
+      document.getElementById('magic-email').focus();
+    }
+
+    function showPin() {
+      document.getElementById('magic-area').classList.add('hidden');
+      document.getElementById('pin-area').classList.remove('hidden');
+      document.getElementById('pin-input').focus();
+    }
+
+    async function sendMagicLink() {
+      const email = document.getElementById('magic-email').value.trim();
+      const role = document.getElementById('magic-role').value;
+      const err = document.getElementById('magic-error');
+      err.classList.add('hidden');
+
+      if (!email || !email.includes('@')) {
+        err.textContent = 'Please enter a valid email.';
+        err.classList.remove('hidden');
+        return;
+      }
+
+      const btn = document.getElementById('magic-btn');
+      btn.textContent = '⏳ Sending...';
+      btn.disabled = true;
+
+      const res = await fetch('/api/auth/magic-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, role })
+      });
+
+      if (res.ok) {
+        document.getElementById('magic-success').classList.remove('hidden');
+        btn.textContent = '✅ Sent!';
+      } else {
+        err.textContent = 'Failed to send magic link. Try again.';
+        err.classList.remove('hidden');
+        btn.textContent = '✨ Send Magic Link';
+        btn.disabled = false;
+      }
+    }
+
+    const params = new URLSearchParams(location.search);
+    if (params.get('error') === 'expired') {
+      showMagicLink();
+      document.getElementById('magic-error').textContent = '⏰ That link expired. Request a new one.';
+      document.getElementById('magic-error').classList.remove('hidden');
+    }
+
+    loadParents();
+  </script>
+</body>
+</html>

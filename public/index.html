@@ -53,67 +53,35 @@
   </div>
 
   <script>
-    let selectedChildId = localStorage.getItem('spellcast_child_id');
-
     async function init() {
-      const res = await fetch('/api/children');
-      const children = await res.json();
-      allChildren = children;
-
-      if (children.length === 0) {
-        document.getElementById('no-words').classList.remove('hidden');
+      // Check if user is logged in with a session
+      const sessionRes = await fetch('/api/session-child');
+      if (sessionRes.status === 401) {
+        // Not logged in, redirect to login
+        window.location.href = '/login';
         return;
       }
 
-      // Build child cards (always, for switching later)
-      const cards = document.getElementById('child-cards');
-      cards.innerHTML = '';
-      for (const child of children) {
-        const btn = document.createElement('button');
-        btn.className = 'child-card';
-        btn.innerHTML = `<div class="child-avatar">${child.avatar}</div><div class="child-name">${child.name}</div>`;
-        btn.onclick = () => selectChild(child.id, children);
-        cards.appendChild(btn);
-      }
+      const session = await sessionRes.json();
+      const childId = session.childId;
 
-      // Check remembered child
-      const remembered = children.find(c => c.id == selectedChildId);
-      if (remembered) {
-        selectChild(remembered.id, children);
-      } else {
-        if (children.length === 1) {
-          document.getElementById('who-prompt').textContent = 'Tap to start spelling! ✨';
-        }
-        document.getElementById('child-select-area').classList.remove('hidden');
-      }
-    }
-
-    let allChildren = [];
-
-    function switchChild() {
-      localStorage.removeItem('spellcast_child_id');
-      document.getElementById('play-area').classList.add('hidden');
-      document.getElementById('no-words').classList.add('hidden');
-      document.body.dataset.theme = 'purple';
-      const area = document.getElementById('child-select-area');
-      area.classList.remove('hidden');
-    }
-
-    async function selectChild(childId, children) {
-      localStorage.setItem('spellcast_child_id', childId);
-      const child = (children || allChildren).find(c => c.id == childId) || null;
-
-      document.getElementById('child-select-area').classList.add('hidden');
-
+      // Load and display the selected child
       const res = await fetch(`/api/child/${childId}/active-list`);
       const list = await res.json();
+      const child = list?.child || { name: 'Spellcaster', theme: 'purple', id: childId };
 
-      document.body.dataset.theme = (child || list?.child)?.theme || 'purple';
+      document.body.dataset.theme = child.theme || 'purple';
 
-      const name = child?.name || list?.child?.name || 'Spellcaster';
-      document.getElementById('greeting').textContent = `Hi, ${name}! 🌟`;
-      // Show switch button only if multiple kids
-      if (allChildren.length > 1) document.getElementById('switch-btn').style.display = 'inline-block';
+      document.getElementById('greeting').textContent = `Hi, ${child.name}! 🌟`;
+      
+      // Check if multiple children, show switch button
+      const childrenRes = await fetch(`/api/parent-children`);
+      if (childrenRes.ok) {
+        const children = await childrenRes.json();
+        if (children.length > 1) {
+          document.getElementById('switch-btn').style.display = 'inline-block';
+        }
+      }
 
       if (!list) {
         document.getElementById('no-words').classList.remove('hidden');
@@ -121,9 +89,16 @@
       }
 
       document.getElementById('week-label').textContent = `This week: ${list.week_label}`;
-      document.getElementById('practice-link').href = `/practice?child=${childId}`;
-      document.getElementById('test-link').href = `/test?child=${childId}`;
+      document.getElementById('practice-link').href = `/practice`;
+      document.getElementById('test-link').href = `/test`;
       document.getElementById('play-area').classList.remove('hidden');
+    }
+
+    function switchChild() {
+      // Logout and go back to login to select new child
+      fetch('/api/logout', { method: 'POST' }).then(() => {
+        window.location.href = '/login';
+      });
     }
 
     init();
