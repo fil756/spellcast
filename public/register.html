@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SpellCast – Create Account</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="login-page" data-theme="purple">
+  <div class="stars"></div>
+  <div class="login-container">
+    <div class="login-card">
+      <div class="login-logo">🪄</div>
+      <h1 class="login-title">Join SpellCast</h1>
+      <p class="login-subtitle">Create your account — we'll email you a magic sign-in link</p>
+
+      <div id="success-msg" class="hidden" style="text-align:center;padding:1.5rem;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3);border-radius:1rem;margin-bottom:1rem;">
+        <div style="font-size:2rem;margin-bottom:0.5rem;">📬</div>
+        <h3 style="color:#4ade80;margin:0 0 0.5rem;">Check your email!</h3>
+        <p id="success-text" style="color:rgba(255,255,255,0.7);margin:0;font-size:0.9rem;"></p>
+      </div>
+
+      <div id="form-area">
+        <div class="form-row" style="margin-bottom:1rem;">
+          <label style="display:block;color:rgba(255,255,255,0.6);font-size:0.85rem;margin-bottom:0.4rem;">I am a...</label>
+          <div style="display:flex;gap:0.75rem;">
+            <button type="button" id="role-parent" onclick="setRole('parent')" class="role-btn active" style="flex:1;padding:0.75rem;border-radius:0.75rem;border:2px solid var(--accent);background:rgba(176,111,255,0.15);color:#fff;cursor:pointer;font-weight:600;">👨‍👩‍👧 Parent</button>
+            <button type="button" id="role-teacher" onclick="setRole('teacher')" class="role-btn" style="flex:1;padding:0.75rem;border-radius:0.75rem;border:2px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.6);cursor:pointer;font-weight:600;">👩‍🏫 Teacher</button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label class="login-label">Your Name</label>
+          <input type="text" id="reg-name" class="login-input" placeholder="Full name" autocomplete="name">
+        </div>
+        <div class="form-row">
+          <label class="login-label">Email Address</label>
+          <input type="email" id="reg-email" class="login-input" placeholder="your@email.com" autocomplete="email">
+        </div>
+
+        <div id="error-msg" class="login-error hidden"></div>
+
+        <button onclick="register()" class="btn-login" style="width:100%;margin-top:0.5rem;" id="submit-btn">
+          ✨ Create Account & Send Magic Link
+        </button>
+
+        <p style="text-align:center;margin-top:1.25rem;color:rgba(255,255,255,0.4);font-size:0.85rem;">
+          Already have an account?
+          <a href="/admin/login" style="color:var(--accent);text-decoration:none;">Sign in here</a>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let role = 'parent';
+
+    function setRole(r) {
+      role = r;
+      const parent = document.getElementById('role-parent');
+      const teacher = document.getElementById('role-teacher');
+      if (r === 'parent') {
+        parent.style.borderColor = 'var(--accent)';
+        parent.style.background = 'rgba(176,111,255,0.15)';
+        parent.style.color = '#fff';
+        teacher.style.borderColor = 'rgba(255,255,255,0.2)';
+        teacher.style.background = 'rgba(255,255,255,0.05)';
+        teacher.style.color = 'rgba(255,255,255,0.6)';
+      } else {
+        teacher.style.borderColor = 'var(--accent)';
+        teacher.style.background = 'rgba(176,111,255,0.15)';
+        teacher.style.color = '#fff';
+        parent.style.borderColor = 'rgba(255,255,255,0.2)';
+        parent.style.background = 'rgba(255,255,255,0.05)';
+        parent.style.color = 'rgba(255,255,255,0.6)';
+      }
+    }
+
+    async function register() {
+      const name = document.getElementById('reg-name').value.trim();
+      const email = document.getElementById('reg-email').value.trim();
+      const err = document.getElementById('error-msg');
+      err.classList.add('hidden');
+
+      if (!name) { err.textContent = 'Please enter your name.'; err.classList.remove('hidden'); return; }
+      if (!email || !email.includes('@')) { err.textContent = 'Please enter a valid email.'; err.classList.remove('hidden'); return; }
+
+      const btn = document.getElementById('submit-btn');
+      btn.textContent = '⏳ Sending...';
+      btn.disabled = true;
+
+      try {
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, role })
+        });
+        const data = await res.json();
+        if (data.success) {
+          document.getElementById('form-area').classList.add('hidden');
+          document.getElementById('success-msg').classList.remove('hidden');
+          document.getElementById('success-text').textContent =
+            `We sent a magic sign-in link to ${email}. Click it to access your ${role === 'teacher' ? 'Teacher Portal' : 'Parent Dashboard'}.`;
+        } else {
+          err.textContent = data.error || 'Something went wrong. Please try again.';
+          err.classList.remove('hidden');
+          btn.textContent = '✨ Create Account & Send Magic Link';
+          btn.disabled = false;
+        }
+      } catch(e) {
+        err.textContent = 'Network error. Please try again.';
+        err.classList.remove('hidden');
+        btn.textContent = '✨ Create Account & Send Magic Link';
+        btn.disabled = false;
+      }
+    }
+
+    document.addEventListener('keydown', e => { if (e.key === 'Enter') register(); });
+  </script>
+</body>
+</html>

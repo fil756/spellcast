@@ -19,6 +19,10 @@
     </div>
   </header>
 
+  <!-- Magic link welcome banner (shown when ?magic=1) -->
+  <div id="magic-banner" class="hidden" style="background:linear-gradient(135deg,rgba(124,58,237,0.3),rgba(176,111,255,0.2));border-bottom:1px solid rgba(176,111,255,0.3);padding:0.75rem 2rem;text-align:center;">
+    <p style="margin:0;font-size:0.9rem;color:rgba(255,255,255,0.9);">✨ You're signed in via magic link! <strong style="color:#b06fff;">Set a PIN</strong> in Settings so you can log in quickly next time. <button onclick="document.getElementById('magic-banner').classList.add('hidden')" style="background:none;border:none;color:rgba(255,255,255,0.4);cursor:pointer;margin-left:1rem;">✕</button></p>
+  </div>
   <div class="admin-container">
 
     <!-- TAB: Words -->
@@ -167,6 +171,9 @@
   </div>
 
   <script>
+    if (new URLSearchParams(location.search).get('magic') === '1') {
+      document.getElementById('magic-banner').classList.remove('hidden');
+    }
     const AVATARS = ['🧙','🧒','👧','🦊','🐉','🦄','🐸','🤖','🦁','🐼','🐨','🦋','🐬','⭐','🌈'];
     let children = [];
     let selectedChildId = null;

@@ -6,27 +6,88 @@
   <title>SpellCast – Parent Login</title>
   <link rel="stylesheet" href="/style.css">
 </head>
-<body class="admin-page">
-  <div class="admin-login-container">
+<body class="login-page" data-theme="purple">
+  <div class="stars"></div>
+  <div class="login-container">
     <div class="login-card">
       <div class="login-logo">🪄</div>
-      <h2>Parent Dashboard</h2>
-      <p>Enter your PIN to continue</p>
-      <form action="/admin/login" method="POST">
-        <input type="password" name="pin" class="pin-input" 
-               placeholder="Enter PIN" maxlength="10" autofocus
-               inputmode="numeric">
-        <button type="submit" class="btn btn-admin-login">Unlock 🔓</button>
-      </form>
-      <div id="error-msg" class="error-msg" style="display:none">
-        ❌ Incorrect PIN. Try again.
+      <h1 class="login-title">Parent Dashboard</h1>
+
+      <!-- PIN Login -->
+      <div id="pin-area">
+        <p class="login-subtitle">Enter your PIN to continue</p>
+        <form action="/admin/login" method="POST">
+          <div class="form-row">
+            <input type="password" name="pin" class="login-input" id="pin-input"
+                   placeholder="Enter PIN" maxlength="10" autofocus inputmode="numeric"
+                   style="text-align:center;letter-spacing:0.3em;font-size:1.5rem;">
+          </div>
+          <div id="pin-error" class="login-error hidden">❌ Incorrect PIN. Try again.</div>
+          <button type="submit" class="btn-login">Unlock 🔓</button>
+        </form>
+        <button onclick="showMagicLink()" class="forgot-pin-btn">Forgot PIN? Send me a magic link</button>
       </div>
-      <a href="/" class="back-link">← Back to SpellCast</a>
+
+      <!-- Magic Link Form -->
+      <div id="magic-area" class="hidden">
+        <p class="login-subtitle">Enter your email and we'll send you a sign-in link</p>
+        <div class="form-row">
+          <input type="email" id="magic-email" class="login-input" placeholder="your@email.com" autocomplete="email">
+        </div>
+        <div id="magic-error" class="login-error hidden"></div>
+        <div id="magic-success" class="hidden" style="background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3);border-radius:0.75rem;padding:1rem;text-align:center;color:#4ade80;margin-bottom:1rem;">
+          📬 Check your email for a sign-in link!
+        </div>
+        <button onclick="sendMagicLink()" class="btn-login" id="magic-btn">✨ Send Magic Link</button>
+        <button onclick="showPin()" class="forgot-pin-btn">← Back to PIN login</button>
+      </div>
+
+      <div style="margin-top:1.5rem;text-align:center;">
+        <a href="/register" style="color:var(--accent);font-size:0.85rem;text-decoration:none;">New here? Create an account</a>
+        &nbsp;·&nbsp;
+        <a href="/" style="color:rgba(255,255,255,0.4);font-size:0.85rem;text-decoration:none;">← Back to SpellCast</a>
+      </div>
     </div>
   </div>
+
   <script>
-    if (window.location.search.includes('error=1')) {
-      document.getElementById('error-msg').style.display = 'block';
+    const params = new URLSearchParams(location.search);
+    if (params.get('error') === '1') document.getElementById('pin-error').classList.remove('hidden');
+    if (params.get('error') === 'expired') {
+      showMagicLink();
+      document.getElementById('magic-error').textContent = '⏰ That link expired. Request a new one.';
+      document.getElementById('magic-error').classList.remove('hidden');
+    }
+
+    function showMagicLink() {
+      document.getElementById('pin-area').classList.add('hidden');
+      document.getElementById('magic-area').classList.remove('hidden');
+      document.getElementById('magic-email').focus();
+    }
+    function showPin() {
+      document.getElementById('magic-area').classList.add('hidden');
+      document.getElementById('pin-area').classList.remove('hidden');
+      document.getElementById('pin-input').focus();
+    }
+
+    async function sendMagicLink() {
+      const email = document.getElementById('magic-email').value.trim();
+      const err = document.getElementById('magic-error');
+      err.classList.add('hidden');
+      if (!email || !email.includes('@')) {
+        err.textContent = 'Please enter a valid email.';
+        err.classList.remove('hidden');
+        return;
+      }
+      const btn = document.getElementById('magic-btn');
+      btn.textContent = '⏳ Sending...';
+      btn.disabled = true;
+      const res = await fetch('/api/auth/magic-link', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, role: 'parent' })
+      });
+      document.getElementById('magic-success').classList.remove('hidden');
+      btn.textContent = '✅ Sent!';
     }
   </script>
 </body>

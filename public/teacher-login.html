@@ -6,65 +6,88 @@
   <title>SpellCast – Teacher Login</title>
   <link rel="stylesheet" href="/style.css">
 </head>
-<body class="admin-page">
-  <div class="admin-login-container">
+<body class="login-page" data-theme="purple">
+  <div class="stars"></div>
+  <div class="login-container">
     <div class="login-card">
       <div class="login-logo">🎓</div>
-      <h2>Teacher Portal</h2>
+      <h1 class="login-title">Teacher Portal</h1>
 
-      <div id="login-form">
-        <p>Enter your teacher PIN</p>
+      <!-- PIN Login -->
+      <div id="pin-area">
+        <p class="login-subtitle">Enter your PIN to continue</p>
         <form action="/teacher/login" method="POST">
-          <input type="password" name="pin" class="pin-input" placeholder="Enter PIN" maxlength="20" autofocus>
-          <button type="submit" class="btn btn-admin-login">Login 🔓</button>
+          <div class="form-row">
+            <input type="password" name="pin" class="login-input" id="pin-input"
+                   placeholder="Enter PIN" maxlength="20" autofocus
+                   style="text-align:center;letter-spacing:0.3em;font-size:1.5rem;">
+          </div>
+          <div id="pin-error" class="login-error hidden">❌ Incorrect PIN. Try again.</div>
+          <button type="submit" class="btn-login">Login 🔓</button>
         </form>
-        <div id="error-msg" class="error-msg" style="display:none">❌ Incorrect PIN. Try again.</div>
-        <hr style="border-color:#334155;margin:1.5rem 0;">
-        <p style="color:#64748b;font-size:0.85rem;">New teacher? <button onclick="showRegister()" style="background:none;border:none;color:#a855f7;cursor:pointer;font-size:0.85rem;">Create an account →</button></p>
+        <button onclick="showMagicLink()" class="forgot-pin-btn">Forgot PIN? Send me a magic link</button>
       </div>
 
-      <div id="register-form" style="display:none">
-        <p>Create your teacher account</p>
-        <input type="text" id="reg-name" class="pin-input" placeholder="Your name" style="letter-spacing:normal;margin-bottom:0.75rem;text-align:left;">
-        <input type="text" id="reg-class-name" class="pin-input" placeholder="Class name (e.g. Mrs. Smith's 2nd Grade)" style="letter-spacing:normal;margin-bottom:0.75rem;text-align:left;">
-        <input type="text" id="reg-class-code" class="pin-input" placeholder="Class code (e.g. SMITH2A)" style="margin-bottom:0.75rem;" maxlength="12">
-        <input type="email" id="reg-email" class="pin-input" placeholder="Your email (optional)" style="letter-spacing:normal;margin-bottom:0.75rem;text-align:left;">
-        <input type="password" id="reg-pin" class="pin-input" placeholder="Set a PIN" style="margin-bottom:0.75rem;">
-        <button onclick="register()" class="btn btn-admin-login">Create Account 🎓</button>
-        <div id="reg-error" class="error-msg" style="display:none"></div>
-        <p style="margin-top:1rem;"><button onclick="showLogin()" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:0.85rem;">← Back to login</button></p>
+      <!-- Magic Link Form -->
+      <div id="magic-area" class="hidden">
+        <p class="login-subtitle">Enter your email and we'll send you a sign-in link</p>
+        <div class="form-row">
+          <input type="email" id="magic-email" class="login-input" placeholder="your@email.com">
+        </div>
+        <div id="magic-error" class="login-error hidden"></div>
+        <div id="magic-success" class="hidden" style="background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3);border-radius:0.75rem;padding:1rem;text-align:center;color:#4ade80;margin-bottom:1rem;">
+          📬 Check your email for a sign-in link!
+        </div>
+        <button onclick="sendMagicLink()" class="btn-login" id="magic-btn">✨ Send Magic Link</button>
+        <button onclick="showPin()" class="forgot-pin-btn">← Back to PIN login</button>
       </div>
 
-      <a href="/" class="back-link">← Back to SpellCast</a>
+      <div style="margin-top:1.5rem;text-align:center;">
+        <a href="/register" style="color:var(--accent);font-size:0.85rem;text-decoration:none;">New teacher? Create an account</a>
+        &nbsp;·&nbsp;
+        <a href="/" style="color:rgba(255,255,255,0.4);font-size:0.85rem;text-decoration:none;">← Back to SpellCast</a>
+      </div>
     </div>
   </div>
+
   <script>
-    if (location.search.includes('error=1')) document.getElementById('error-msg').style.display = 'block';
-    function showRegister() { document.getElementById('login-form').style.display='none'; document.getElementById('register-form').style.display='block'; }
-    function showLogin() { document.getElementById('register-form').style.display='none'; document.getElementById('login-form').style.display='block'; }
+    const params = new URLSearchParams(location.search);
+    if (params.get('error') === '1') document.getElementById('pin-error').classList.remove('hidden');
+    if (params.get('error') === 'expired') {
+      showMagicLink();
+      document.getElementById('magic-error').textContent = '⏰ That link expired. Request a new one.';
+      document.getElementById('magic-error').classList.remove('hidden');
+    }
 
-    async function register() {
-      const name = document.getElementById('reg-name').value.trim();
-      const class_name = document.getElementById('reg-class-name').value.trim();
-      const class_code = document.getElementById('reg-class-code').value.trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
-      const email = document.getElementById('reg-email').value.trim();
-      const pin = document.getElementById('reg-pin').value;
-      const errEl = document.getElementById('reg-error');
+    function showMagicLink() {
+      document.getElementById('pin-area').classList.add('hidden');
+      document.getElementById('magic-area').classList.remove('hidden');
+      document.getElementById('magic-email').focus();
+    }
+    function showPin() {
+      document.getElementById('magic-area').classList.add('hidden');
+      document.getElementById('pin-area').classList.remove('hidden');
+      document.getElementById('pin-input').focus();
+    }
 
-      if (!name || !class_name || !class_code || !pin) { errEl.textContent='❌ Please fill all required fields.'; errEl.style.display='block'; return; }
-      if (class_code.length < 4) { errEl.textContent='❌ Class code must be at least 4 characters.'; errEl.style.display='block'; return; }
-
-      const res = await fetch('/api/teacher/register', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ name, class_name, class_code, email, pin })
-      });
-      const data = await res.json();
-      if (data.success) {
-        location.href = '/teacher';
-      } else {
-        errEl.textContent = '❌ ' + (data.error || 'Registration failed');
-        errEl.style.display = 'block';
+    async function sendMagicLink() {
+      const email = document.getElementById('magic-email').value.trim();
+      const err = document.getElementById('magic-error');
+      err.classList.add('hidden');
+      if (!email || !email.includes('@')) {
+        err.textContent = 'Please enter a valid email.';
+        err.classList.remove('hidden');
+        return;
       }
+      const btn = document.getElementById('magic-btn');
+      btn.textContent = '⏳ Sending...';
+      btn.disabled = true;
+      await fetch('/api/auth/magic-link', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, role: 'teacher' })
+      });
+      document.getElementById('magic-success').classList.remove('hidden');
+      btn.textContent = '✅ Sent!';
     }
   </script>
 </body>

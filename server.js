@@ -5,6 +5,7 @@ const nodemailer = require('nodemailer');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -53,6 +54,95 @@ async function generateAudioForList(listId, words) {
   for (const word of words) {
     generateAudio(word, listId).catch(() => {});
   }
+}
+
+// ─── SENDGRID EMAIL ──────────────────────────────────────────────
+const SENDGRID_FROM = { email: 'phil@atelierdp.com', name: 'Phil Parrish' };
+
+async function sendEmail({ to, subject, html, text }) {
+  const apiKey = process.env.SENDGRID_API_KEY;
+  if (!apiKey) { console.error('SENDGRID_API_KEY not set'); return false; }
+
+  const body = JSON.stringify({
+    personalizations: [{ to: [{ email: to }] }],
+    from: SENDGRID_FROM,
+    subject,
+    content: [
+      { type: 'text/plain', value: text || subject },
+      { type: 'text/html', value: html }
+    ]
+  });
+
+  return new Promise((resolve) => {
+    const req = https.request({
+      hostname: 'api.sendgrid.com',
+      path: '/v3/mail/send',
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body)
+      }
+    }, (res) => {
+      resolve(res.statusCode >= 200 && res.statusCode < 300);
+      res.resume();
+    });
+    req.on('error', () => resolve(false));
+    req.setTimeout(10000, () => { req.destroy(); resolve(false); });
+    req.write(body);
+    req.end();
+  });
+}
+
+function getMagicLinkEmail(name, link, role) {
+  const roleLabel = role === 'teacher' ? 'Teacher Portal' : 'Parent Dashboard';
+  return {
+    html: `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#1a0533;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#1a0533;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#2d1065;border-radius:16px;overflow:hidden;max-width:600px;width:100%;">
+        <tr><td style="background:linear-gradient(135deg,#7c3aed,#b06fff);padding:32px;text-align:center;">
+          <div style="font-size:48px;margin-bottom:8px;">🪄</div>
+          <h1 style="color:#fff;margin:0;font-size:28px;font-weight:800;">SpellCast</h1>
+          <p style="color:rgba(255,255,255,0.8);margin:8px 0 0;font-size:14px;">Magic Spelling Practice</p>
+        </td></tr>
+        <tr><td style="padding:40px 32px;">
+          <h2 style="color:#fff;margin:0 0 8px;font-size:22px;">Hi ${name}! 👋</h2>
+          <p style="color:rgba(255,255,255,0.75);margin:0 0 32px;font-size:16px;line-height:1.6;">
+            Click the magic button below to sign in to your <strong style="color:#b06fff;">${roleLabel}</strong>.<br>
+            This link expires in <strong style="color:#b06fff;">15 minutes</strong>.
+          </p>
+          <div style="text-align:center;margin:32px 0;">
+            <a href="${link}" style="display:inline-block;background:linear-gradient(135deg,#7c3aed,#b06fff);color:#fff;text-decoration:none;padding:16px 40px;border-radius:50px;font-size:18px;font-weight:700;letter-spacing:0.5px;">
+              ✨ Sign In to SpellCast
+            </a>
+          </div>
+          <p style="color:rgba(255,255,255,0.4);font-size:13px;text-align:center;margin:24px 0 0;">
+            If you didn't request this, you can safely ignore it.<br>
+            Link: <a href="${link}" style="color:#b06fff;">${link}</a>
+          </p>
+        </td></tr>
+        <tr><td style="padding:20px 32px;border-top:1px solid rgba(255,255,255,0.1);text-align:center;">
+          <p style="color:rgba(255,255,255,0.3);font-size:12px;margin:0;">SpellCast · Atelier Design & Print · McPherson, KS</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`,
+    text: `Hi ${name}! Sign in to your SpellCast ${roleLabel}: ${link}\n\nThis link expires in 15 minutes. If you didn't request this, ignore this email.`
+  };
+}
+
+function createMagicToken(email, role) {
+  const token = crypto.randomBytes(32).toString('hex');
+  const expires = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+  db.prepare(`DELETE FROM magic_tokens WHERE email=? AND role=?`).run(email, role); // revoke old
+  db.prepare(`INSERT INTO magic_tokens (token,email,role,expires_at) VALUES (?,?,?,?)`).run(token, email, role, expires);
+  return token;
 }
 
 // ─── SCHEMA ─────────────────────────────────────────────────────
@@ -129,6 +219,15 @@ db.exec(`
     FOREIGN KEY (teacher_id) REFERENCES teachers(id)
   );
 
+  CREATE TABLE IF NOT EXISTS magic_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    token TEXT NOT NULL UNIQUE,
+    email TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'parent',
+    used INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME NOT NULL
+  );
 `);
 
 // Safe migrations
@@ -260,7 +359,86 @@ const requireAdmin = (req, res, next) => {
 };
 
 // ─── AUTH ROUTES ─────────────────────────────────────────────────
+app.get('/register', (req, res) => res.sendFile(path.join(__dirname, 'public', 'register.html')));
 app.get('/admin/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin-login.html')));
+
+// Registration — creates parent account + sends magic link
+app.post('/api/auth/register', async (req, res) => {
+  const { name, email, role } = req.body;
+  if (!name || !email) return res.json({ success: false, error: 'Name and email required' });
+  const r = (role === 'teacher') ? 'teacher' : 'parent';
+
+  if (r === 'parent') {
+    let parent = db.prepare(`SELECT * FROM parents WHERE email=?`).get(email);
+    if (!parent) {
+      const ins = db.prepare(`INSERT INTO parents (name,email,pin) VALUES (?,?,'1234')`).run(name, email);
+      // Create default child
+      db.prepare(`INSERT INTO children (parent_id,name,avatar,theme) VALUES (?,'Spellcaster','🧙','purple')`).run(ins.lastInsertRowid);
+      parent = db.prepare(`SELECT * FROM parents WHERE id=?`).get(ins.lastInsertRowid);
+    }
+    const token = createMagicToken(email, 'parent');
+    const BASE = process.env.BASE_URL || `https://spellcast-production.up.railway.app`;
+    const link = `${BASE}/api/auth/verify/${token}`;
+    const { html, text } = getMagicLinkEmail(parent.name, link, 'parent');
+    const sent = await sendEmail({ to: email, subject: '🪄 Your SpellCast Sign-In Link', html, text });
+    res.json({ success: true, sent, message: sent ? 'Check your email for a magic sign-in link!' : 'Account created but email failed — contact support.' });
+  } else {
+    let teacher = db.prepare(`SELECT * FROM teachers WHERE email=?`).get(email);
+    if (!teacher) {
+      const code = (name.toUpperCase().replace(/[^A-Z]/g,'').substring(0,6) + Math.floor(100+Math.random()*900));
+      db.prepare(`INSERT INTO teachers (name,email,class_name,class_code,pin) VALUES (?,?,?,?,'0000')`).run(name, email, `${name}'s Class`, code);
+      teacher = db.prepare(`SELECT * FROM teachers WHERE email=?`).get(email);
+    }
+    const token = createMagicToken(email, 'teacher');
+    const BASE = process.env.BASE_URL || `https://spellcast-production.up.railway.app`;
+    const link = `${BASE}/api/auth/verify/${token}`;
+    const { html, text } = getMagicLinkEmail(teacher.name, link, 'teacher');
+    const sent = await sendEmail({ to: email, subject: '🪄 Your SpellCast Teacher Sign-In Link', html, text });
+    res.json({ success: true, sent });
+  }
+});
+
+// Request magic link (for existing users who forgot PIN)
+app.post('/api/auth/magic-link', async (req, res) => {
+  const { email, role } = req.body;
+  if (!email) return res.json({ success: false, error: 'Email required' });
+  const r = (role === 'teacher') ? 'teacher' : 'parent';
+  const user = r === 'parent'
+    ? db.prepare(`SELECT * FROM parents WHERE email=?`).get(email)
+    : db.prepare(`SELECT * FROM teachers WHERE email=?`).get(email);
+  // Always respond the same to prevent email enumeration
+  if (user) {
+    const token = createMagicToken(email, r);
+    const BASE = process.env.BASE_URL || `https://spellcast-production.up.railway.app`;
+    const link = `${BASE}/api/auth/verify/${token}`;
+    const { html, text } = getMagicLinkEmail(user.name, link, r);
+    await sendEmail({ to: email, subject: '🪄 Your SpellCast Sign-In Link', html, text });
+  }
+  res.json({ success: true, message: "If that email is registered, you'll get a link shortly." });
+});
+
+// Verify magic link token
+app.get('/api/auth/verify/:token', (req, res) => {
+  const now = new Date().toISOString();
+  const record = db.prepare(`SELECT * FROM magic_tokens WHERE token=? AND used=0 AND expires_at > ?`).get(req.params.token, now);
+  if (!record) return res.redirect('/admin/login?error=expired');
+
+  db.prepare(`UPDATE magic_tokens SET used=1 WHERE id=?`).run(record.id);
+
+  if (record.role === 'parent') {
+    const parent = db.prepare(`SELECT * FROM parents WHERE email=?`).get(record.email);
+    if (!parent) return res.redirect('/admin/login?error=notfound');
+    req.session.parentId = parent.id;
+    req.session.magicAuth = true; // Flag that they came via magic link (prompt to set PIN)
+    res.redirect('/admin?magic=1');
+  } else {
+    const teacher = db.prepare(`SELECT * FROM teachers WHERE email=?`).get(record.email);
+    if (!teacher) return res.redirect('/teacher/login?error=notfound');
+    req.session.teacherId = teacher.id;
+    req.session.magicAuth = true;
+    res.redirect('/teacher?magic=1');
+  }
+});
 
 app.post('/admin/login', (req, res) => {
   const { pin } = req.body;

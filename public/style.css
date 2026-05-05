@@ -128,6 +128,26 @@ body { background: var(--bg1); }
 .btn-admin-login:hover { background: #6d28d9; }
 .error-msg { color: #f87171; margin-top: 1rem; font-size: 0.9rem; }
 .back-link { display: block; margin-top: 1.5rem; color: #64748b; font-size: 0.85rem; text-decoration: none; }
+
+/* ─── NEW LOGIN PAGES ─────────────────────────────── */
+.login-page { background: var(--bg1); }
+.login-container { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 1.5rem; }
+.login-card { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 1.75rem; padding: 2.5rem 2rem; text-align: center; width: 100%; max-width: 420px; backdrop-filter: blur(10px); }
+.login-logo { font-size: 3rem; margin-bottom: 0.5rem; }
+.login-title { font-size: 1.75rem; font-weight: 800; margin: 0 0 0.5rem; }
+.login-subtitle { color: rgba(255,255,255,0.55); margin: 0 0 1.5rem; font-size: 0.9rem; }
+.login-label { display: block; text-align: left; color: rgba(255,255,255,0.5); font-size: 0.8rem; margin-bottom: 0.35rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
+.login-input { width: 100%; padding: 0.85rem 1rem; background: rgba(255,255,255,0.07); border: 2px solid rgba(255,255,255,0.12); border-radius: 0.75rem; color: white; font-size: 1rem; outline: none; transition: border-color 0.2s; }
+.login-input:focus { border-color: var(--accent); }
+.btn-login { width: 100%; padding: 0.9rem; background: linear-gradient(135deg,#7c3aed,#b06fff); color: white; border: none; border-radius: 0.75rem; font-size: 1.1rem; font-weight: 700; cursor: pointer; margin-top: 0.75rem; transition: opacity 0.2s; }
+.btn-login:hover { opacity: 0.9; }
+.btn-login:disabled { opacity: 0.6; cursor: default; }
+.login-error { color: #f87171; font-size: 0.85rem; margin: 0.5rem 0; padding: 0.5rem; background: rgba(248,113,113,0.1); border-radius: 0.5rem; }
+.forgot-pin-btn { background: none; border: none; color: rgba(255,255,255,0.4); font-size: 0.85rem; cursor: pointer; margin-top: 0.75rem; display: block; width: 100%; padding: 0.4rem; border-radius: 0.5rem; transition: color 0.2s; }
+.forgot-pin-btn:hover { color: var(--accent); }
+.magic-banner { background: linear-gradient(135deg,rgba(124,58,237,0.2),rgba(176,111,255,0.15)); border: 1px solid rgba(176,111,255,0.3); border-radius: 1rem; padding: 1rem 1.25rem; margin-bottom: 1.5rem; }
+.magic-banner p { margin: 0; font-size: 0.9rem; color: rgba(255,255,255,0.8); }
+
 .admin-header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 2rem; background: #1e293b; border-bottom: 1px solid #334155; flex-wrap: wrap; gap: 0.75rem; }
 .admin-logo { font-size: 1.3rem; font-weight: 800; color: #a855f7; }
 .admin-nav { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
