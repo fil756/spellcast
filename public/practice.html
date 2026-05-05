@@ -60,6 +60,13 @@
       document.getElementById('test-link').href = `/test?child=${childId}`;
       words = list.words;
       listId = list.id;
+      // Pre-warm audio for all words silently before starting
+      if (listId) {
+        words.forEach(w => {
+          const a = new Audio(`/api/audio/${listId}/${encodeURIComponent(w.word)}`);
+          a.preload = 'auto';
+        });
+      }
       startPractice();
     }
 

@@ -66,6 +66,13 @@
       document.getElementById('practice-link').href = `/practice?child=${childId}`;
       listId = list.id;
       words = [...list.words].sort(() => Math.random() - 0.5);
+      // Pre-warm all audio silently
+      if (listId) {
+        words.forEach(w => {
+          const a = new Audio(`/api/audio/${listId}/${encodeURIComponent(w.word)}`);
+          a.preload = 'auto';
+        });
+      }
       document.getElementById('word-count').textContent = words.length;
       document.getElementById('loading').classList.add('hidden');
       document.getElementById('intro-area').classList.remove('hidden');
