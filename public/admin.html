@@ -252,7 +252,7 @@
       const warnings = [];
       const seen = new Set();
       for (const w of words) {
-        if (/[^a-z\-']/.test(w)) warnings.push(`"${w}" has unusual characters`);
+        if (/[^a-zA-Z\-']/.test(w)) warnings.push(`"${w}" has unusual characters`);
         if (seen.has(w)) warnings.push(`"${w}" is duplicated`);
         seen.add(w);
       }
