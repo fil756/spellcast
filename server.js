@@ -482,7 +482,17 @@ app.put('/api/admin/children/:id', requireAdmin, (req, res) => {
 });
 
 app.delete('/api/admin/children/:id', requireAdmin, (req, res) => {
-  db.prepare(`DELETE FROM children WHERE id=? AND parent_id=?`).run(req.params.id, req.session.parentId);
+  const child = db.prepare(`SELECT * FROM children WHERE id=? AND parent_id=?`).get(req.params.id, req.session.parentId);
+  if (!child) return res.status(403).json({ error: 'Not found' });
+  // Cascade delete in order: test_results → words → word_lists → class_subscriptions → child
+  const lists = db.prepare(`SELECT id FROM word_lists WHERE child_id=?`).all(child.id);
+  for (const l of lists) {
+    db.prepare(`DELETE FROM words WHERE list_id=?`).run(l.id);
+    db.prepare(`DELETE FROM test_results WHERE list_id=?`).run(l.id);
+  }
+  db.prepare(`DELETE FROM word_lists WHERE child_id=?`).run(child.id);
+  db.prepare(`DELETE FROM class_subscriptions WHERE child_id=?`).run(child.id);
+  db.prepare(`DELETE FROM children WHERE id=?`).run(child.id);
   res.json({ success: true });
 });
 
