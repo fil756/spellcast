@@ -68,7 +68,7 @@
       words = [...list.words].sort(() => Math.random() - 0.5);
       // Pre-warm all audio silently
       if (listId) {
-        words.forEach(w => {
+        words.filter(w => w.word).forEach(w => {
           const a = new Audio(`/api/audio/${listId}/${encodeURIComponent(w.word)}`);
           a.preload = 'auto';
         });

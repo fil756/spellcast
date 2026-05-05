@@ -679,7 +679,9 @@ app.delete('/api/admin/classes/:teacher_id/:child_id', requireAdmin, (req, res) 
 
 // ─── AUDIO ENDPOINT ─────────────────────────────────────────────
 app.get('/api/audio/:list_id/:word', (req, res) => {
-  const safeWord = req.params.word.replace(/[^a-zA-Z0-9\-']/g, '_');
+  const rawWord = req.params.word;
+  if (!rawWord || rawWord === 'undefined' || rawWord === 'null') return res.status(400).json({ error: 'Invalid word' });
+  const safeWord = rawWord.replace(/[^a-zA-Z0-9\-']/g, '_');
   const filePath = path.join(AUDIO_DIR, `${req.params.list_id}_${safeWord}.mp3`);
   if (fs.existsSync(filePath)) {
     res.setHeader('Content-Type', 'audio/mpeg');

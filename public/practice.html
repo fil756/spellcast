@@ -62,7 +62,7 @@
       listId = list.id;
       // Pre-warm audio for all words silently before starting
       if (listId) {
-        words.forEach(w => {
+        words.filter(w => w.word).forEach(w => {
           const a = new Audio(`/api/audio/${listId}/${encodeURIComponent(w.word)}`);
           a.preload = 'auto';
         });
