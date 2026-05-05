@@ -86,8 +86,17 @@
       setTimeout(() => speakWord(), 400);
     }
 
-    function speakWord() {
+    async function speakWord() {
       const word = words[currentIndex]; if(!word) return;
+      // Try OpenAI TTS first
+      if (listId) {
+        try {
+          const audio = new Audio(`/api/audio/${listId}/${encodeURIComponent(word.word)}`);
+          await audio.play();
+          return;
+        } catch(e) { /* fall through */ }
+      }
+      // Browser TTS fallback
       const u = new SpeechSynthesisUtterance(word.word);
       u.rate = 0.85; u.pitch = 1.1; speechSynthesis.speak(u);
     }

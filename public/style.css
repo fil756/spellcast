@@ -177,10 +177,14 @@ body { background: var(--bg1); }
 .word-warnings { background: rgba(251,191,36,0.15); border: 1px solid rgba(251,191,36,0.3); color: #fbbf24; border-radius: 0.5rem; padding: 0.6rem 1rem; font-size: 0.85rem; margin-bottom: 0.75rem; }
 
 /* ─── CHILD SELECTOR (HOME) ──────────────────────── */
-.who-prompt { font-size: 1.4rem; font-weight: 700; color: var(--accent); margin-bottom: 1.5rem; }
-.child-cards { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; margin-bottom: 1.5rem; }
-.child-card { background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.2); border-radius: 1.5rem; padding: 1.5rem 2rem; cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; align-items: center; gap: 0.5rem; min-width: 130px; }
-.child-card:hover { background: rgba(255,255,255,0.2); transform: translateY(-4px); border-color: var(--accent); }
+.who-prompt { font-size: 1.6rem; font-weight: 700; color: var(--accent); margin-bottom: 1.5rem; }
+.child-cards { display: flex; gap: 1.5rem; justify-content: center; flex-wrap: wrap; margin-bottom: 1.5rem; }
+.child-card { background: rgba(255,255,255,0.08); border: 3px solid rgba(255,255,255,0.15); border-radius: 2rem; padding: 2rem 2.5rem; cursor: pointer; transition: all 0.25s; display: flex; flex-direction: column; align-items: center; gap: 0.75rem; min-width: 140px; }
+.child-card:hover, .child-card:active { background: rgba(255,255,255,0.2); transform: translateY(-6px) scale(1.05); border-color: var(--accent); box-shadow: 0 8px 30px rgba(176,111,255,0.4); }
+.child-card .child-avatar { font-size: 3.5rem; line-height: 1; }
+.child-card .child-name { font-size: 1.1rem; font-weight: 700; color: #fff; }
+.switch-child-btn { background: none; border: none; color: rgba(255,255,255,0.4); font-size: 0.85rem; cursor: pointer; margin-top: 0.5rem; padding: 0.25rem 0.5rem; border-radius: 0.5rem; }
+.switch-child-btn:hover { color: var(--accent); background: rgba(255,255,255,0.05); }
 .child-avatar { font-size: 3rem; }
 .child-name { font-size: 1.1rem; font-weight: 700; }
 .no-words-msg { text-align: center; color: rgba(255,255,255,0.5); margin: 1.5rem 0; }

@@ -47,6 +47,7 @@
   <script>
     const childId = new URLSearchParams(location.search).get('child') || localStorage.getItem('spellcast_child_id');
     let words = [], queue = [], currentWord = null, correct = 0, total = 0, streak = 0;
+    let listId = null;
 
     async function loadWords() {
       const res = await fetch(`/api/child/${childId}/active-list`);
@@ -58,6 +59,7 @@
       document.body.dataset.theme = list.child?.theme || 'purple';
       document.getElementById('test-link').href = `/test?child=${childId}`;
       words = list.words;
+      listId = list.id;
       startPractice();
     }
 
@@ -95,8 +97,18 @@
       setTimeout(() => speakWord(), 300);
     }
 
-    function speakWord() {
+    async function speakWord() {
       if (!currentWord) return;
+      // Try OpenAI TTS first
+      if (listId) {
+        try {
+          const audio = new Audio(`/api/audio/${listId}/${encodeURIComponent(currentWord.word)}`);
+          audio.playbackRate = 1.0;
+          await audio.play();
+          return;
+        } catch(e) { /* fall through to browser TTS */ }
+      }
+      // Browser TTS fallback
       const u = new SpeechSynthesisUtterance(currentWord.word);
       u.rate = 0.85; u.pitch = 1.1;
       speechSynthesis.speak(u);

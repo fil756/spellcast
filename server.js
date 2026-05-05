@@ -4,6 +4,7 @@ const Database = require('better-sqlite3');
 const nodemailer = require('nodemailer');
 const path = require('path');
 const fs = require('fs');
+const https = require('https');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -11,6 +12,48 @@ const DATA_DIR = process.env.DATA_DIR || './data';
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 const db = new Database(path.join(DATA_DIR, 'spellcast.db'));
+
+// Audio cache directory
+const AUDIO_DIR = path.join(DATA_DIR, 'audio');
+if (!fs.existsSync(AUDIO_DIR)) fs.mkdirSync(AUDIO_DIR, { recursive: true });
+
+// ─── TTS HELPER ──────────────────────────────────────────────────
+async function generateAudio(word, listId) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return null; // Fall back to browser TTS
+
+  const safeWord = word.replace(/[^a-zA-Z0-9\-']/g, '_');
+  const filePath = path.join(AUDIO_DIR, `${listId}_${safeWord}.mp3`);
+  if (fs.existsSync(filePath)) return filePath; // Already cached
+
+  return new Promise((resolve) => {
+    const body = JSON.stringify({ model: 'tts-1', input: word, voice: 'nova', speed: 0.85 });
+    const req = https.request({
+      hostname: 'api.openai.com', path: '/v1/audio/speech',
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+    }, (res) => {
+      if (res.statusCode !== 200) { resolve(null); return; }
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => {
+        fs.writeFileSync(filePath, Buffer.concat(chunks));
+        resolve(filePath);
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.setTimeout(10000, () => { req.destroy(); resolve(null); });
+    req.write(body);
+    req.end();
+  });
+}
+
+async function generateAudioForList(listId, words) {
+  // Fire and forget — generate in background
+  for (const word of words) {
+    generateAudio(word, listId).catch(() => {});
+  }
+}
 
 // ─── SCHEMA ─────────────────────────────────────────────────────
 db.exec(`
@@ -273,6 +316,8 @@ app.post('/api/admin/lists', requireAdmin, (req, res) => {
   for (const w of words.slice(0,20)) {
     db.prepare(`INSERT INTO words (list_id,word) VALUES (?,?)`).run(list.lastInsertRowid, w.trim());
   }
+  // Pre-generate TTS audio in background
+  generateAudioForList(list.lastInsertRowid, words.slice(0,20).map(w => w.trim()));
   res.json({ success: true, list_id: list.lastInsertRowid });
 });
 
@@ -288,6 +333,8 @@ app.put('/api/admin/lists/:list_id', requireAdmin, (req, res) => {
     db.prepare(`INSERT INTO words (list_id,word) VALUES (?,?)`).run(list.id, w.trim());
   }
   if (week_label) db.prepare(`UPDATE word_lists SET week_label=? WHERE id=?`).run(week_label, list.id);
+  // Pre-generate TTS audio in background
+  generateAudioForList(list.id, (words||[]).slice(0,20).map(w => w.trim()));
   res.json({ success: true });
 });
 
@@ -386,6 +433,7 @@ app.post('/api/teacher/push-list', requireTeacher, (req, res) => {
     for (const w of words.slice(0,20)) {
       db.prepare(`INSERT INTO words (list_id, word) VALUES (?,?)`).run(list.lastInsertRowid, w.trim());
     }
+    generateAudioForList(list.lastInsertRowid, words.slice(0,20).map(w => w.trim()));
     created++;
   }
   res.json({ success: true, students_updated: created });
@@ -449,6 +497,26 @@ app.delete('/api/admin/classes/:teacher_id/:child_id', requireAdmin, (req, res) 
   if (!child) return res.status(403).json({ error: 'Not your child' });
   db.prepare(`DELETE FROM class_subscriptions WHERE teacher_id=? AND child_id=?`).run(req.params.teacher_id, req.params.child_id);
   res.json({ success: true });
+});
+
+// ─── AUDIO ENDPOINT ─────────────────────────────────────────────
+app.get('/api/audio/:list_id/:word', (req, res) => {
+  const safeWord = req.params.word.replace(/[^a-zA-Z0-9\-']/g, '_');
+  const filePath = path.join(AUDIO_DIR, `${req.params.list_id}_${safeWord}.mp3`);
+  if (fs.existsSync(filePath)) {
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.sendFile(filePath);
+  }
+  // Not yet generated — generate now and return
+  generateAudio(req.params.word, req.params.list_id).then(fp => {
+    if (fp) {
+      res.setHeader('Content-Type', 'audio/mpeg');
+      res.sendFile(fp);
+    } else {
+      res.status(404).json({ error: 'Audio not available' });
+    }
+  });
 });
 
 // ─── PUBLIC API ──────────────────────────────────────────────────

@@ -25,6 +25,7 @@
     <div id="play-area" class="hidden">
       <div id="greeting" class="greeting"></div>
       <div id="week-label" class="week-label"></div>
+      <button class="switch-child-btn" id="switch-btn" onclick="switchChild()" style="display:none">✏️ Not you?</button>
       <div class="home-buttons">
         <a id="practice-link" href="/practice" class="btn btn-practice">
           <span class="btn-icon">✨</span>
@@ -57,33 +58,52 @@
     async function init() {
       const res = await fetch('/api/children');
       const children = await res.json();
+      allChildren = children;
 
       if (children.length === 0) {
         document.getElementById('no-words').classList.remove('hidden');
         return;
       }
 
-      if (children.length === 1) {
+      // Build child cards (always, for switching later)
+      const cards = document.getElementById('child-cards');
+      cards.innerHTML = '';
+      for (const child of children) {
+        const btn = document.createElement('button');
+        btn.className = 'child-card';
+        btn.innerHTML = `<div class="child-avatar">${child.avatar}</div><div class="child-name">${child.name}</div>`;
+        btn.onclick = () => selectChild(child.id, children);
+        cards.appendChild(btn);
+      }
+
+      // Check remembered child
+      const remembered = children.find(c => c.id == selectedChildId);
+      if (remembered) {
+        // Auto-select remembered child
+        selectChild(remembered.id, children);
+      } else if (children.length === 1) {
         // Only one child, auto-select
         selectChild(children[0].id, children);
       } else {
         // Show child picker
-        const area = document.getElementById('child-select-area');
-        area.classList.remove('hidden');
-        const cards = document.getElementById('child-cards');
-        for (const child of children) {
-          const btn = document.createElement('button');
-          btn.className = 'child-card';
-          btn.innerHTML = `<div class="child-avatar">${child.avatar}</div><div class="child-name">${child.name}</div>`;
-          btn.onclick = () => selectChild(child.id, children);
-          cards.appendChild(btn);
-        }
+        document.getElementById('child-select-area').classList.remove('hidden');
       }
+    }
+
+    let allChildren = [];
+
+    function switchChild() {
+      localStorage.removeItem('spellcast_child_id');
+      document.getElementById('play-area').classList.add('hidden');
+      document.getElementById('no-words').classList.add('hidden');
+      document.body.dataset.theme = 'purple';
+      const area = document.getElementById('child-select-area');
+      area.classList.remove('hidden');
     }
 
     async function selectChild(childId, children) {
       localStorage.setItem('spellcast_child_id', childId);
-      const child = children ? children.find(c => c.id == childId) : null;
+      const child = (children || allChildren).find(c => c.id == childId) || null;
 
       document.getElementById('child-select-area').classList.add('hidden');
 
@@ -94,6 +114,8 @@
 
       const name = child?.name || list?.child?.name || 'Spellcaster';
       document.getElementById('greeting').textContent = `Hi, ${name}! 🌟`;
+      // Show switch button only if multiple kids
+      if (allChildren.length > 1) document.getElementById('switch-btn').style.display = 'inline-block';
 
       if (!list) {
         document.getElementById('no-words').classList.remove('hidden');
