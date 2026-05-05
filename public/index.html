@@ -17,7 +17,7 @@
 
     <!-- Child selector -->
     <div id="child-select-area" class="hidden">
-      <p class="who-prompt">Who's spelling today?</p>
+      <p class="who-prompt" id="who-prompt">Who's spelling today?</p>
       <div id="child-cards" class="child-cards"></div>
     </div>
 
@@ -79,13 +79,11 @@
       // Check remembered child
       const remembered = children.find(c => c.id == selectedChildId);
       if (remembered) {
-        // Auto-select remembered child
         selectChild(remembered.id, children);
-      } else if (children.length === 1) {
-        // Only one child, auto-select
-        selectChild(children[0].id, children);
       } else {
-        // Show child picker
+        if (children.length === 1) {
+          document.getElementById('who-prompt').textContent = 'Tap to start spelling! ✨';
+        }
         document.getElementById('child-select-area').classList.remove('hidden');
       }
     }
