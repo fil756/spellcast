@@ -271,7 +271,7 @@ app.post('/api/admin/lists', requireAdmin, (req, res) => {
   if (!child) return res.status(403).json({ error: 'Not your child' });
   const list = db.prepare(`INSERT INTO word_lists (child_id,week_label) VALUES (?,?)`).run(child_id, week_label);
   for (const w of words.slice(0,20)) {
-    db.prepare(`INSERT INTO words (list_id,word) VALUES (?,?)`).run(list.lastInsertRowid, w.trim().toLowerCase());
+    db.prepare(`INSERT INTO words (list_id,word) VALUES (?,?)`).run(list.lastInsertRowid, w.trim());
   }
   res.json({ success: true, list_id: list.lastInsertRowid });
 });
@@ -369,7 +369,7 @@ app.post('/api/teacher/push-list', requireTeacher, (req, res) => {
     const list = db.prepare(`INSERT INTO word_lists (child_id, week_label, teacher_id) VALUES (?,?,?)`)
       .run(child_id, week_label, req.session.teacherId);
     for (const w of words.slice(0,20)) {
-      db.prepare(`INSERT INTO words (list_id, word) VALUES (?,?)`).run(list.lastInsertRowid, w.trim().toLowerCase());
+      db.prepare(`INSERT INTO words (list_id, word) VALUES (?,?)`).run(list.lastInsertRowid, w.trim());
     }
     created++;
   }
