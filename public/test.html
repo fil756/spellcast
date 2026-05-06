@@ -152,7 +152,9 @@
       for (const a of answers) {
         const div = document.createElement('div');
         div.className = 'review-item ' + (a.correct?'correct':'incorrect');
-        div.innerHTML = a.correct ? `✅ <strong>${a.word}</strong>` : `❌ <strong>${a.word}</strong> <span class="you-wrote">(you wrote: "${a.given}")</span>`;
+        div.innerHTML = a.correct
+          ? `✅ <strong>${a.word}</strong>`
+          : `❌ <span style="font-size:1.6rem;font-weight:900;letter-spacing:0.05em;">${a.word}</span> <span class="you-wrote">(you wrote: "${a.given}")</span>`;
         review.appendChild(div);
       }
 

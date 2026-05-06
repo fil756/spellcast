@@ -136,7 +136,7 @@
       } else {
         streak = 0; updateStreak();
         feedback.className = 'feedback incorrect';
-        feedback.innerHTML = `Almost! The word is <strong>${currentWord.word}</strong> ❌<br><small>You wrote: "${input}"</small>`;
+        feedback.innerHTML = `Almost! ❌<br><span style="font-size:2.5rem;font-weight:900;letter-spacing:0.05em;color:#fff;">${currentWord.word}</span><br><small style="opacity:0.6;">You wrote: "${raw}"</small>`;
         document.getElementById('hint-area').textContent = `📝 Study it: ${currentWord.word}`;
       }
       feedback.classList.remove('hidden');
