@@ -354,8 +354,10 @@ app.use(session({
 }));
 
 const requireAdmin = (req, res, next) => {
-  if (req.session.parentId && req.session.childId) return next();
-  res.redirect('/login');
+  if (!req.session.parentId) return res.redirect('/login');
+  // If parentId set but no childId (e.g. magic link auth), send to child selection
+  if (!req.session.childId) return res.redirect(`/select-child?parentId=${req.session.parentId}`);
+  next();
 };
 
 const requireTeacher = (req, res, next) => {
@@ -477,8 +479,8 @@ app.get('/api/auth/verify/:token', (req, res) => {
     const parent = db.prepare(`SELECT * FROM parents WHERE email=?`).get(record.email);
     if (!parent) return res.redirect('/admin/login?error=notfound');
     req.session.parentId = parent.id;
-    req.session.magicAuth = true; // Flag that they came via magic link (prompt to set PIN)
-    res.redirect('/admin?magic=1');
+    req.session.magicAuth = true;
+    res.redirect(`/select-child?parentId=${parent.id}&magic=1`);
   } else {
     const teacher = db.prepare(`SELECT * FROM teachers WHERE email=?`).get(record.email);
     if (!teacher) return res.redirect('/teacher/login?error=notfound');
