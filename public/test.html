@@ -109,10 +109,14 @@
     }
 
     function submitAnswer() {
-      const input = document.getElementById('spell-input').value.trim().toLowerCase();
-      if (!input) { speakWord(); return; }
+      const raw = document.getElementById('spell-input').value.trim();
+      if (!raw) { speakWord(); return; }
       const word = words[currentIndex];
-      answers.push({ word_id: word.id, word: word.word, given: input, correct: input === word.word });
+      // If requires_capital, compare as-is. Otherwise case-insensitive.
+      const correct = word.requires_capital
+        ? raw === word.word
+        : raw.toLowerCase() === word.word.toLowerCase();
+      answers.push({ word_id: word.id, word: word.word, given: raw, correct });
       currentIndex++;
       if (currentIndex >= words.length) showResults();
       else showWord();

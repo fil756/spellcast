@@ -39,7 +39,7 @@
         </div>
         <div class="words-grid" id="words-grid"></div>
         <div id="word-warnings" class="word-warnings hidden"></div>
-        <p class="words-note">📝 Saved as lowercase. Spell check on — red underlines = possible typo!</p>
+        <p class="words-note">📝 Spell check on — red underlines = possible typo! Check <strong>Aa</strong> next to words that need a capital first letter (like names).</p>
         <button onclick="saveWords()" class="btn btn-admin-save">💾 Save This Week's Words</button>
         <div id="save-message" class="save-message hidden"></div>
       </div>
@@ -201,7 +201,10 @@
       div.className = 'word-input-wrap';
       div.innerHTML = `<span class="word-num">${i}.</span>
         <input type="text" class="word-input" id="word-${i}" placeholder="Word ${i}"
-               autocomplete="off" spellcheck="true" lang="en">`;
+               autocomplete="off" spellcheck="true" lang="en">
+        <label class="cap-label" title="Require capital first letter">
+          <input type="checkbox" id="cap-${i}" class="cap-check"> Aa
+        </label>`;
       grid.appendChild(div);
     }
 
@@ -264,6 +267,7 @@
       for (let i = 1; i <= 20; i++) {
         const w = list.words[i-1];
         document.getElementById('word-'+i).value = w ? w.word : '';
+        document.getElementById('cap-'+i).checked = w ? !!w.requires_capital : false;
       }
       // Update button to show we're editing
       const btn = document.querySelector('button[onclick="saveWords()"]');
@@ -283,9 +287,13 @@
       const weekLabel = document.getElementById('week-label').value.trim();
       if (!weekLabel) { alert('Please enter a week label!'); return; }
       const words = [];
+      const capitals = [];
       for (let i = 1; i <= 20; i++) {
         const val = document.getElementById('word-'+i).value.trim();
-        if (val) words.push(val);
+        if (val) {
+          words.push(val);
+          capitals.push(document.getElementById('cap-'+i).checked ? 1 : 0);
+        }
       }
       if (!words.length) { alert('Please enter at least one word!'); return; }
 
@@ -308,12 +316,12 @@
       if (editingListId) {
         res = await fetch(`/api/admin/lists/${editingListId}`, {
           method: 'PUT', headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ week_label: weekLabel, words })
+          body: JSON.stringify({ week_label: weekLabel, words, capitals })
         });
       } else {
         res = await fetch('/api/admin/lists', {
           method: 'POST', headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ child_id: parseInt(childId), week_label: weekLabel, words })
+          body: JSON.stringify({ child_id: parseInt(childId), week_label: weekLabel, words, capitals })
         });
       }
       const data = await res.json();

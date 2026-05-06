@@ -235,6 +235,7 @@ try { db.exec(`ALTER TABLE word_lists ADD COLUMN child_id INTEGER REFERENCES chi
 try { db.exec(`ALTER TABLE word_lists ADD COLUMN teacher_id INTEGER REFERENCES teachers(id)`); } catch(e) {}
 try { db.exec(`ALTER TABLE test_results ADD COLUMN child_id INTEGER REFERENCES children(id)`); } catch(e) {}
 try { db.exec(`ALTER TABLE test_results ADD COLUMN correct INTEGER DEFAULT 0`); } catch(e) {}
+try { db.exec(`ALTER TABLE words ADD COLUMN requires_capital INTEGER DEFAULT 0`); } catch(e) {}
 
 // Backfill child_id on old word_lists rows that are missing it
 db.exec(`
@@ -536,31 +537,31 @@ app.delete('/api/admin/children/:id', requireAdmin, (req, res) => {
 });
 
 app.post('/api/admin/lists', requireAdmin, (req, res) => {
-  const { child_id, week_label, words } = req.body;
+  const { child_id, week_label, words, capitals } = req.body;
   const child = db.prepare(`SELECT * FROM children WHERE id=? AND parent_id=?`).get(child_id, req.session.parentId);
   if (!child) return res.status(403).json({ error: 'Not your child' });
   const list = db.prepare(`INSERT INTO word_lists (child_id,week_label) VALUES (?,?)`).run(child_id, week_label);
-  for (const w of words.slice(0,20)) {
-    db.prepare(`INSERT INTO words (list_id,word) VALUES (?,?)`).run(list.lastInsertRowid, w.trim());
-  }
-  // Pre-generate TTS audio in background
+  words.slice(0,20).forEach((w, idx) => {
+    const cap = capitals && capitals[idx] ? 1 : 0;
+    db.prepare(`INSERT INTO words (list_id,word,requires_capital) VALUES (?,?,?)`).run(list.lastInsertRowid, w.trim(), cap);
+  });
   generateAudioForList(list.lastInsertRowid, words.slice(0,20).map(w => w.trim()));
   res.json({ success: true, list_id: list.lastInsertRowid });
 });
 
 // Update existing list words
 app.put('/api/admin/lists/:list_id', requireAdmin, (req, res) => {
-  const { words, week_label } = req.body;
+  const { words, week_label, capitals } = req.body;
   const list = db.prepare(`
     SELECT wl.* FROM word_lists wl JOIN children c ON wl.child_id=c.id
     WHERE wl.id=? AND c.parent_id=?`).get(req.params.list_id, req.session.parentId);
   if (!list) return res.status(403).json({ error: 'Not found' });
   db.prepare(`DELETE FROM words WHERE list_id=?`).run(list.id);
-  for (const w of (words||[]).slice(0,20)) {
-    db.prepare(`INSERT INTO words (list_id,word) VALUES (?,?)`).run(list.id, w.trim());
-  }
+  (words||[]).slice(0,20).forEach((w, idx) => {
+    const cap = capitals && capitals[idx] ? 1 : 0;
+    db.prepare(`INSERT INTO words (list_id,word,requires_capital) VALUES (?,?,?)`).run(list.id, w.trim(), cap);
+  });
   if (week_label) db.prepare(`UPDATE word_lists SET week_label=? WHERE id=?`).run(week_label, list.id);
-  // Pre-generate TTS audio in background
   generateAudioForList(list.id, (words||[]).slice(0,20).map(w => w.trim()));
   res.json({ success: true });
 });

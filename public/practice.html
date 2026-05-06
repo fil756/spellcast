@@ -122,11 +122,13 @@
     }
 
     function checkAnswer() {
-      const input = document.getElementById('spell-input').value.trim().toLowerCase();
-      if (!input) return;
+      const raw = document.getElementById('spell-input').value.trim();
+      if (!raw) return;
+      const input = currentWord.requires_capital ? raw : raw.toLowerCase();
+      const wordTarget = currentWord.requires_capital ? currentWord.word : currentWord.word.toLowerCase();
       const feedback = document.getElementById('feedback');
       const nextBtn = document.getElementById('next-btn');
-      if (input === currentWord.word) {
+      if (input === wordTarget) {
         correct++; streak++; updateStreak();
         feedback.className = 'feedback correct';
         feedback.innerHTML = getCorrectMessage() + ` <strong>${currentWord.word}</strong> ✅`;
