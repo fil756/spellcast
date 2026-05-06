@@ -15,12 +15,17 @@
 
       <!-- PIN Login -->
       <div id="pin-area">
-        <p class="login-subtitle">Enter your PIN to continue</p>
-        <form action="/admin/login" method="POST">
+        <p class="login-subtitle">Select your name and enter your PIN</p>
+        <form onsubmit="handleLogin(event)">
           <div class="form-row">
-            <input type="password" name="pin" class="login-input" id="pin-input"
-                   placeholder="Enter PIN" maxlength="10" autofocus inputmode="numeric"
-                   style="text-align:center;letter-spacing:0.3em;font-size:1.5rem;">
+            <select id="parent-select" class="login-input" style="appearance:auto;cursor:pointer;" required>
+              <option value="">Loading...</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <input type="password" id="pin-input" class="login-input"
+                   placeholder="Enter PIN" maxlength="10" inputmode="numeric"
+                   style="text-align:center;letter-spacing:0.3em;font-size:1.5rem;" required>
           </div>
           <div id="pin-error" class="login-error hidden">❌ Incorrect PIN. Try again.</div>
           <button type="submit" class="btn-login">Unlock 🔓</button>
@@ -51,12 +56,40 @@
   </div>
 
   <script>
-    const params = new URLSearchParams(location.search);
-    if (params.get('error') === '1') document.getElementById('pin-error').classList.remove('hidden');
-    if (params.get('error') === 'expired') {
-      showMagicLink();
-      document.getElementById('magic-error').textContent = '⏰ That link expired. Request a new one.';
-      document.getElementById('magic-error').classList.remove('hidden');
+    async function loadParents() {
+      const res = await fetch('/api/public/parents');
+      const parents = await res.json();
+      const select = document.getElementById('parent-select');
+      if (parents.length === 0) {
+        select.innerHTML = '<option value="">No accounts yet</option>';
+      } else {
+        select.innerHTML = parents.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+      }
+    }
+
+    async function handleLogin(event) {
+      event.preventDefault();
+      const parentId = parseInt(document.getElementById('parent-select').value);
+      const pin = document.getElementById('pin-input').value;
+      const err = document.getElementById('pin-error');
+      err.classList.add('hidden');
+
+      const res = await fetch('/api/public/verify-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parentId, pin })
+      });
+
+      if (res.ok) {
+        // Set session and go to dashboard
+        const data = await res.json();
+        // Store parentId in session via a simple redirect with token approach
+        window.location.href = `/api/admin/session-login?parentId=${parentId}&pin=${encodeURIComponent(pin)}`;
+      } else {
+        err.classList.remove('hidden');
+        document.getElementById('pin-input').value = '';
+        document.getElementById('pin-input').focus();
+      }
     }
 
     function showMagicLink() {
@@ -82,13 +115,23 @@
       const btn = document.getElementById('magic-btn');
       btn.textContent = '⏳ Sending...';
       btn.disabled = true;
-      const res = await fetch('/api/auth/magic-link', {
+      await fetch('/api/auth/magic-link', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, role: 'parent' })
       });
       document.getElementById('magic-success').classList.remove('hidden');
       btn.textContent = '✅ Sent!';
     }
+
+    const params = new URLSearchParams(location.search);
+    if (params.get('error') === '1') document.getElementById('pin-error').classList.remove('hidden');
+    if (params.get('error') === 'expired') {
+      showMagicLink();
+      document.getElementById('magic-error').textContent = '⏰ That link expired. Request a new one.';
+      document.getElementById('magic-error').classList.remove('hidden');
+    }
+
+    loadParents();
   </script>
 </body>
 </html>

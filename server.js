@@ -354,9 +354,7 @@ app.use(session({
 }));
 
 const requireAdmin = (req, res, next) => {
-  if (!req.session.parentId) return res.redirect('/login');
-  // If parentId set but no childId (e.g. magic link auth), send to child selection
-  if (!req.session.childId) return res.redirect(`/select-child?parentId=${req.session.parentId}`);
+  if (!req.session.parentId) return res.redirect('/admin/login');
   next();
 };
 
@@ -480,7 +478,7 @@ app.get('/api/auth/verify/:token', (req, res) => {
     if (!parent) return res.redirect('/admin/login?error=notfound');
     req.session.parentId = parent.id;
     req.session.magicAuth = true;
-    res.redirect(`/select-child?parentId=${parent.id}&magic=1`);
+    res.redirect('/admin?magic=1');
   } else {
     const teacher = db.prepare(`SELECT * FROM teachers WHERE email=?`).get(record.email);
     if (!teacher) return res.redirect('/teacher/login?error=notfound');
@@ -490,12 +488,22 @@ app.get('/api/auth/verify/:token', (req, res) => {
   }
 });
 
-// Legacy admin login — redirect to new flow
+// Legacy admin login POST (form fallback)
 app.post('/admin/login', (req, res) => {
-  res.redirect('/login');
+  res.redirect('/admin/login');
 });
 
-app.get('/admin/logout', (req, res) => { req.session.destroy(); res.redirect('/login'); });
+// Session login after PIN verified client-side
+app.get('/api/admin/session-login', (req, res) => {
+  const { parentId, pin } = req.query;
+  if (!parentId || !pin) return res.redirect('/admin/login?error=1');
+  const parent = db.prepare(`SELECT id FROM parents WHERE id=? AND pin=?`).get(parentId, pin);
+  if (!parent) return res.redirect('/admin/login?error=1');
+  req.session.parentId = parent.id;
+  res.redirect('/admin');
+});
+
+app.get('/admin/logout', (req, res) => { req.session.destroy(); res.redirect('/admin/login'); });
 app.get('/admin', requireAdmin, (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 
 // ─── ADMIN API ───────────────────────────────────────────────────
