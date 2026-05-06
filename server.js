@@ -283,7 +283,8 @@ function getTransporter() {
 }
 
 async function sendResultNotification(parent, child, result, words) {
-  if (!process.env.SMTP_USER) return; // Email not configured
+  if (!parent.notify_email || !parent.email) return; // Nothing to do
+  if (!process.env.SENDGRID_API_KEY) { console.error('SENDGRID_API_KEY not set'); return; }
 
   const grade = result.score >= 90 ? 'A' : result.score >= 80 ? 'B' : result.score >= 70 ? 'C' : result.score >= 60 ? 'D' : 'F';
   const trophy = result.score === 100 ? '🏆' : result.score >= 90 ? '🥇' : result.score >= 80 ? '🥈' : result.score >= 70 ? '🥉' : '💪';
@@ -292,7 +293,7 @@ async function sendResultNotification(parent, child, result, words) {
   const missedWords = details.filter(a => !a.correct).map(a => `• ${a.word} (you wrote: "${a.given}")`).join('\n');
   const correctWords = details.filter(a => a.correct).map(a => `✓ ${a.word}`).join('  ');
 
-  const emailBody = `
+  const text = `
 ${trophy} SpellCast Results for ${child.name}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Grade: ${grade}  |  Score: ${result.score}%  |  ${result.correct}/${result.total} correct
@@ -303,44 +304,48 @@ Words spelled correctly: ${correctWords || 'none'}
 Keep practicing at spellcast-production.up.railway.app
   `.trim();
 
-  const htmlBody = `
-<div style="font-family:sans-serif;max-width:500px;margin:0 auto;background:#1a0533;color:#fff;border-radius:16px;padding:24px;">
-  <h2 style="color:#b06fff;">${trophy} SpellCast Results</h2>
-  <p style="font-size:1.1em;">Results for <strong>${child.name}</strong></p>
-  <div style="background:rgba(255,255,255,0.1);border-radius:12px;padding:16px;margin:16px 0;text-align:center;">
-    <div style="font-size:3em;font-weight:800;">${result.score}%</div>
-    <div style="color:#b06fff;font-size:1.3em;">Grade ${grade}</div>
-    <div style="opacity:0.7;">${result.correct} out of ${result.total} correct</div>
-  </div>
-  ${missedWords ? `<p style="color:#f87171;"><strong>Words to practice:</strong><br>${details.filter(a=>!a.correct).map(a=>`${a.word} <small>(wrote: "${a.given}")</small>`).join('<br>')}</p>` : '<p style="color:#4ade80;">🌟 Perfect score! Every word correct!</p>'}
-  <p style="opacity:0.5;font-size:0.8em;">Sent by SpellCast 🪄</p>
-</div>`;
+  const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#1a0533;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#1a0533;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#2d1065;border-radius:16px;overflow:hidden;max-width:600px;width:100%;">
+        <tr><td style="background:linear-gradient(135deg,#7c3aed,#b06fff);padding:32px;text-align:center;">
+          <div style="font-size:48px;margin-bottom:8px;">🪄</div>
+          <h1 style="color:#fff;margin:0;font-size:28px;font-weight:800;">SpellCast</h1>
+          <p style="color:rgba(255,255,255,0.8);margin:8px 0 0;font-size:14px;">Spelling Test Results</p>
+        </td></tr>
+        <tr><td style="padding:40px 32px;">
+          <h2 style="color:#fff;margin:0 0 8px;font-size:22px;">${trophy} Results for ${child.name}</h2>
+          <div style="background:rgba(255,255,255,0.1);border-radius:12px;padding:24px;margin:20px 0;text-align:center;">
+            <div style="font-size:4em;font-weight:800;color:#fff;">${result.score}%</div>
+            <div style="color:#b06fff;font-size:1.4em;font-weight:700;">Grade ${grade}</div>
+            <div style="color:rgba(255,255,255,0.6);margin-top:8px;">${result.correct} out of ${result.total} correct</div>
+          </div>
+          ${details.filter(a=>!a.correct).length > 0
+            ? `<div style="margin:20px 0;">
+                <p style="color:#f87171;font-weight:700;margin:0 0 8px;">Words to practice:</p>
+                ${details.filter(a=>!a.correct).map(a=>`<div style="color:rgba(255,255,255,0.8);padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.1);">📝 <strong>${a.word}</strong> <span style="color:rgba(255,255,255,0.4);font-size:0.9em;">(wrote: "${a.given}")</span></div>`).join('')}
+               </div>`
+            : `<p style="color:#4ade80;font-size:1.1em;text-align:center;">🌟 Perfect score! Every word correct!</p>`
+          }
+        </td></tr>
+        <tr><td style="padding:20px 32px;border-top:1px solid rgba(255,255,255,0.1);text-align:center;">
+          <p style="color:rgba(255,255,255,0.3);font-size:12px;margin:0;">SpellCast · Atelier Design & Print · McPherson, KS</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
 
-  const transporter = getTransporter();
-  const promises = [];
-
-  if (parent.notify_email && parent.email) {
-    promises.push(transporter.sendMail({
-      from: `SpellCast 🪄 <${process.env.SMTP_USER}>`,
-      to: parent.email,
-      subject: `${trophy} ${child.name} scored ${result.score}% on SpellCast!`,
-      text: emailBody,
-      html: htmlBody,
-    }));
-  }
-
-  if (parent.notify_sms && parent.phone && parent.carrier && CARRIERS[parent.carrier]) {
-    const smsEmail = parent.phone.replace(/\D/g,'') + CARRIERS[parent.carrier];
-    const smsBody = `SpellCast: ${child.name} got ${result.score}% (${grade}) - ${result.correct}/${result.total} correct${missedWords ? '. Study: ' + details.filter(a=>!a.correct).map(a=>a.word).join(', ') : ' - Perfect!'}`;
-    promises.push(transporter.sendMail({
-      from: process.env.SMTP_USER,
-      to: smsEmail,
-      subject: '',
-      text: smsBody,
-    }));
-  }
-
-  await Promise.allSettled(promises);
+  await sendEmail({
+    to: parent.email,
+    subject: `${trophy} ${child.name} scored ${result.score}% on SpellCast!`,
+    html,
+    text,
+  });
 }
 
 // ─── MIDDLEWARE ──────────────────────────────────────────────────
