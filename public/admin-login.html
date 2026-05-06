@@ -16,14 +16,14 @@
       <!-- PIN Login -->
       <div id="pin-area">
         <p class="login-subtitle">Select your name and enter your PIN</p>
-        <form onsubmit="handleLogin(event)">
+        <form id="login-form" action="/admin/login" method="POST">
           <div class="form-row">
-            <select id="parent-select" class="login-input" style="appearance:auto;cursor:pointer;" required>
+            <select name="parentId" id="parent-select" class="login-input" style="appearance:auto;cursor:pointer;" required>
               <option value="">Loading...</option>
             </select>
           </div>
           <div class="form-row">
-            <input type="password" id="pin-input" class="login-input"
+            <input type="password" name="pin" id="pin-input" class="login-input"
                    placeholder="Enter PIN" maxlength="10" inputmode="numeric"
                    style="text-align:center;letter-spacing:0.3em;font-size:1.5rem;" required>
           </div>
@@ -64,31 +64,6 @@
         select.innerHTML = '<option value="">No accounts yet</option>';
       } else {
         select.innerHTML = parents.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-      }
-    }
-
-    async function handleLogin(event) {
-      event.preventDefault();
-      const parentId = parseInt(document.getElementById('parent-select').value);
-      const pin = document.getElementById('pin-input').value;
-      const err = document.getElementById('pin-error');
-      err.classList.add('hidden');
-
-      const res = await fetch('/api/public/verify-pin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ parentId, pin })
-      });
-
-      if (res.ok) {
-        // Set session and go to dashboard
-        const data = await res.json();
-        // Store parentId in session via a simple redirect with token approach
-        window.location.href = `/api/admin/session-login?parentId=${parentId}&pin=${encodeURIComponent(pin)}`;
-      } else {
-        err.classList.remove('hidden');
-        document.getElementById('pin-input').value = '';
-        document.getElementById('pin-input').focus();
       }
     }
 

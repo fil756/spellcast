@@ -364,8 +364,6 @@ const requireTeacher = (req, res, next) => {
 };
 
 // ─── AUTH ROUTES ─────────────────────────────────────────────────
-app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
-app.get('/select-child', (req, res) => res.sendFile(path.join(__dirname, 'public', 'select-child.html')));
 app.get('/register', (req, res) => res.sendFile(path.join(__dirname, 'public', 'register.html')));
 app.get('/admin/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin-login.html')));
 
@@ -387,6 +385,12 @@ app.post('/api/public/verify-pin', (req, res) => {
   res.json({ parentId: parent.id });
 });
 
+// Get all teachers (public list for login dropdown)
+app.get('/api/public/teachers', (req, res) => {
+  const teachers = db.prepare(`SELECT id,name,class_name FROM teachers ORDER BY name ASC`).all();
+  res.json(teachers);
+});
+
 // Get children for a parent (after PIN verify)
 app.get('/api/public/parent-children', (req, res) => {
   const parentId = req.query.parentId;
@@ -396,19 +400,7 @@ app.get('/api/public/parent-children', (req, res) => {
   res.json(children);
 });
 
-// Select a child (stores in session)
-app.post('/api/public/select-child', (req, res) => {
-  const { parentId, childId } = req.body;
-  if (!parentId || !childId) return res.status(400).json({ error: 'Missing parentId or childId' });
 
-  // Verify child belongs to parent
-  const child = db.prepare(`SELECT id FROM children WHERE id=? AND parent_id=?`).get(childId, parentId);
-  if (!child) return res.status(401).json({ error: 'Child does not belong to parent' });
-
-  req.session.parentId = parentId;
-  req.session.childId = childId;
-  res.json({ success: true });
-});
 
 // Registration — creates parent account + sends magic link
 app.post('/api/auth/register', async (req, res) => {
@@ -488,14 +480,9 @@ app.get('/api/auth/verify/:token', (req, res) => {
   }
 });
 
-// Legacy admin login POST (form fallback)
+// Admin login POST — verify PIN and set session
 app.post('/admin/login', (req, res) => {
-  res.redirect('/admin/login');
-});
-
-// Session login after PIN verified client-side
-app.get('/api/admin/session-login', (req, res) => {
-  const { parentId, pin } = req.query;
+  const { parentId, pin } = req.body;
   if (!parentId || !pin) return res.redirect('/admin/login?error=1');
   const parent = db.prepare(`SELECT id FROM parents WHERE id=? AND pin=?`).get(parentId, pin);
   if (!parent) return res.redirect('/admin/login?error=1');
@@ -607,8 +594,9 @@ app.get('/teacher/logout', (req, res) => { req.session.destroy(); res.redirect('
 app.get('/teacher', requireTeacher, (req, res) => res.sendFile(path.join(__dirname, 'public', 'teacher.html')));
 
 app.post('/teacher/login', (req, res) => {
-  const { pin } = req.body;
-  const teacher = db.prepare(`SELECT * FROM teachers WHERE pin = ?`).get(pin);
+  const { teacherId, pin } = req.body;
+  if (!teacherId || !pin) return res.redirect('/teacher/login?error=1');
+  const teacher = db.prepare(`SELECT * FROM teachers WHERE id=? AND pin=?`).get(teacherId, pin);
   if (teacher) {
     req.session.teacherId = teacher.id;
     res.redirect('/teacher');
@@ -734,30 +722,7 @@ app.delete('/api/admin/classes/:teacher_id/:child_id', requireAdmin, (req, res) 
   res.json({ success: true });
 });
 
-// ─── SESSION MANAGEMENT ────────────────────────────────────────
-// Get current session child info
-app.get('/api/session-child', (req, res) => {
-  if (!req.session.parentId || !req.session.childId) {
-    return res.status(401).json({ error: 'Not logged in' });
-  }
-  const child = db.prepare(`SELECT * FROM children WHERE id=? AND parent_id=?`).get(req.session.childId, req.session.parentId);
-  if (!child) return res.status(401).json({ error: 'Invalid session' });
-  res.json({ childId: child.id, child });
-});
 
-// Get parent's children (authenticated endpoint)
-app.get('/api/parent-children', (req, res) => {
-  if (!req.session.parentId) return res.status(401).json({ error: 'Not logged in' });
-  const children = db.prepare(`SELECT id,name,avatar,theme FROM children WHERE parent_id=? ORDER BY name ASC`).all(req.session.parentId);
-  res.json(children);
-});
-
-// Logout
-app.post('/api/logout', (req, res) => {
-  req.session.destroy((err) => {
-    res.json({ success: true });
-  });
-});
 
 // ─── AUDIO ENDPOINT ─────────────────────────────────────────────
 app.get('/api/audio/:list_id/:word', (req, res) => {

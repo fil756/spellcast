@@ -15,8 +15,13 @@
 
       <!-- PIN Login -->
       <div id="pin-area">
-        <p class="login-subtitle">Enter your PIN to continue</p>
+        <p class="login-subtitle">Select your name and enter your PIN</p>
         <form action="/teacher/login" method="POST">
+          <div class="form-row">
+            <select name="teacherId" id="teacher-select" class="login-input" style="appearance:auto;cursor:pointer;" required>
+              <option value="">Loading...</option>
+            </select>
+          </div>
           <div class="form-row">
             <input type="password" name="pin" class="login-input" id="pin-input"
                    placeholder="Enter PIN" maxlength="20" autofocus
@@ -51,6 +56,18 @@
   </div>
 
   <script>
+    async function loadTeachers() {
+      const res = await fetch('/api/public/teachers');
+      const teachers = await res.json();
+      const select = document.getElementById('teacher-select');
+      if (teachers.length === 0) {
+        select.innerHTML = '<option value="">No accounts yet</option>';
+      } else {
+        select.innerHTML = teachers.map(t => `<option value="${t.id}">${t.name} — ${t.class_name}</option>`).join('');
+      }
+    }
+    loadTeachers();
+
     const params = new URLSearchParams(location.search);
     if (params.get('error') === '1') document.getElementById('pin-error').classList.remove('hidden');
     if (params.get('error') === 'expired') {
