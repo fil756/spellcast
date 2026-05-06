@@ -592,11 +592,6 @@ app.get('/api/admin/results', requireAdmin, (req, res) => {
 });
 
 // ─── TEACHER ROUTES ─────────────────────────────────────────────
-const requireTeacher = (req, res, next) => {
-  if (req.session.teacherId) return next();
-  res.redirect('/teacher/login');
-};
-
 app.get('/teacher/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'teacher-login.html')));
 app.get('/teacher/logout', (req, res) => { req.session.destroy(); res.redirect('/teacher/login'); });
 app.get('/teacher', requireTeacher, (req, res) => res.sendFile(path.join(__dirname, 'public', 'teacher.html')));
