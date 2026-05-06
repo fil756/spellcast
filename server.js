@@ -776,7 +776,7 @@ app.get('/api/audio/:list_id/:word', (req, res) => {
 // ─── PUBLIC API ──────────────────────────────────────────────────
 // Get all children (for home selector - no auth needed, safe info only)
 app.get('/api/children', (req, res) => {
-  const children = db.prepare(`SELECT id, name, avatar, theme FROM children ORDER BY name`).all();
+  const children = db.prepare(`SELECT id, parent_id, name, avatar, theme FROM children ORDER BY name`).all();
   res.json(children);
 });
 

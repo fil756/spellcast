@@ -5,6 +5,45 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SpellCast 🪄</title>
   <link rel="stylesheet" href="/style.css">
+  <style>
+    .pin-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10,5,30,0.92);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      backdrop-filter: blur(6px);
+    }
+    .pin-card {
+      background: var(--card-bg, rgba(255,255,255,0.07));
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 1.5rem;
+      padding: 2rem 2.5rem;
+      text-align: center;
+      max-width: 320px;
+      width: 90%;
+    }
+    .pin-card h2 { color: #fff; margin: 0 0 0.5rem; }
+    .pin-card p { color: rgba(255,255,255,0.6); margin: 0 0 1.5rem; font-size: 0.9rem; }
+    .pin-input {
+      width: 100%;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 0.75rem;
+      color: #fff;
+      font-size: 1.8rem;
+      letter-spacing: 0.4em;
+      text-align: center;
+      padding: 0.75rem;
+      margin-bottom: 1rem;
+      box-sizing: border-box;
+    }
+    .pin-error { color: #f87171; font-size: 0.85rem; margin-bottom: 1rem; }
+    .pin-cancel { background: none; border: none; color: rgba(255,255,255,0.4); font-size: 0.85rem; cursor: pointer; margin-top: 0.5rem; }
+    .pin-cancel:hover { color: rgba(255,255,255,0.7); }
+  </style>
 </head>
 <body class="home-page" data-theme="purple">
   <div class="stars"></div>
@@ -15,17 +54,17 @@
       <p class="subtitle">Magic Spelling Practice</p>
     </div>
 
-    <!-- Child selector -->
-    <div id="child-select-area" class="hidden">
-      <p class="who-prompt" id="who-prompt">Who's spelling today?</p>
+    <!-- Child selector — always visible -->
+    <div id="child-select-area">
+      <p class="who-prompt">Who's spelling today?</p>
       <div id="child-cards" class="child-cards"></div>
     </div>
 
-    <!-- Single child or after selection -->
+    <!-- After child selected + PIN verified -->
     <div id="play-area" class="hidden">
       <div id="greeting" class="greeting"></div>
       <div id="week-label" class="week-label"></div>
-      <button class="switch-child-btn" id="switch-btn" onclick="switchChild()" style="display:none">✏️ Not you?</button>
+      <button class="switch-child-btn" id="switch-btn" onclick="switchChild()">✏️ Not you?</button>
       <div class="home-buttons">
         <a id="practice-link" href="/practice" class="btn btn-practice">
           <span class="btn-icon">✨</span>
@@ -52,52 +91,133 @@
     </div>
   </div>
 
+  <!-- PIN overlay (hidden by default) -->
+  <div id="pin-overlay" class="pin-overlay hidden">
+    <div class="pin-card">
+      <div id="pin-child-avatar" style="font-size:2.5rem;margin-bottom:0.5rem;"></div>
+      <h2 id="pin-child-name">Enter PIN</h2>
+      <p>Ask a parent to enter their PIN</p>
+      <input type="password" id="pin-input" class="pin-input" placeholder="••••" maxlength="10" inputmode="numeric" autofocus>
+      <div id="pin-error" class="pin-error hidden">❌ Incorrect PIN. Try again.</div>
+      <button onclick="submitPin()" class="btn-login" style="width:100%;margin-bottom:0.5rem;">Unlock 🔓</button>
+      <button onclick="closePin()" class="pin-cancel">← Back</button>
+    </div>
+  </div>
+
   <script>
+    let allChildren = [];
+    let pendingChildId = null;
+    let pendingParentId = null;
+
     async function init() {
-      // Check if user is logged in with a session
-      const sessionRes = await fetch('/api/session-child');
-      if (sessionRes.status === 401) {
-        // Not logged in, redirect to login
-        window.location.href = '/login';
-        return;
-      }
+      // Load all children for display (no auth needed)
+      const res = await fetch('/api/children');
+      allChildren = await res.json();
 
-      const session = await sessionRes.json();
-      const childId = session.childId;
-
-      // Load and display the selected child
-      const res = await fetch(`/api/child/${childId}/active-list`);
-      const list = await res.json();
-      const child = list?.child || { name: 'Spellcaster', theme: 'purple', id: childId };
-
-      document.body.dataset.theme = child.theme || 'purple';
-
-      document.getElementById('greeting').textContent = `Hi, ${child.name}! 🌟`;
-      
-      // Check if multiple children, show switch button
-      const childrenRes = await fetch(`/api/parent-children`);
-      if (childrenRes.ok) {
-        const children = await childrenRes.json();
-        if (children.length > 1) {
-          document.getElementById('switch-btn').style.display = 'inline-block';
-        }
-      }
-
-      if (!list) {
+      if (allChildren.length === 0) {
+        document.getElementById('child-select-area').style.display = 'none';
         document.getElementById('no-words').classList.remove('hidden');
         return;
       }
 
+      const cards = document.getElementById('child-cards');
+      cards.innerHTML = allChildren.map(child => `
+        <button class="child-card" data-theme="${child.theme}" onclick="pickChild(${child.id}, ${child.parent_id}, '${child.name}', '${child.avatar}')">
+          <div class="child-avatar">${child.avatar}</div>
+          <div class="child-name">${child.name}</div>
+        </button>
+      `).join('');
+
+      // If already have a valid session, skip straight to play area
+      const sessionRes = await fetch('/api/session-child');
+      if (sessionRes.ok) {
+        const session = await sessionRes.json();
+        const child = allChildren.find(c => c.id === session.childId);
+        if (child) {
+          showPlayArea(child);
+          return;
+        }
+      }
+    }
+
+    function pickChild(childId, parentId, name, avatar) {
+      pendingChildId = childId;
+      pendingParentId = parentId;
+      document.getElementById('pin-child-avatar').textContent = avatar;
+      document.getElementById('pin-child-name').textContent = name;
+      document.getElementById('pin-input').value = '';
+      document.getElementById('pin-error').classList.add('hidden');
+      document.getElementById('pin-overlay').classList.remove('hidden');
+      setTimeout(() => document.getElementById('pin-input').focus(), 100);
+    }
+
+    function closePin() {
+      document.getElementById('pin-overlay').classList.add('hidden');
+      pendingChildId = null;
+      pendingParentId = null;
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !document.getElementById('pin-overlay').classList.contains('hidden')) {
+        submitPin();
+      }
+      if (e.key === 'Escape') closePin();
+    });
+
+    async function submitPin() {
+      const pin = document.getElementById('pin-input').value;
+      const err = document.getElementById('pin-error');
+      err.classList.add('hidden');
+
+      const res = await fetch('/api/public/verify-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parentId: pendingParentId, pin })
+      });
+
+      if (!res.ok) {
+        err.classList.remove('hidden');
+        document.getElementById('pin-input').value = '';
+        document.getElementById('pin-input').focus();
+        return;
+      }
+
+      // PIN correct — set child in session
+      await fetch('/api/public/select-child', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parentId: pendingParentId, childId: pendingChildId })
+      });
+
+      closePin();
+      const child = allChildren.find(c => c.id === pendingChildId) || { name: 'Spellcaster', theme: 'purple', avatar: '🧙' };
+      showPlayArea(child);
+    }
+
+    async function showPlayArea(child) {
+      document.body.dataset.theme = child.theme || 'purple';
+      document.getElementById('child-select-area').classList.add('hidden');
+      document.getElementById('greeting').textContent = `Hi, ${child.name}! 🌟`;
+
+      const res = await fetch(`/api/child/${child.id}/active-list`);
+      const list = await res.json();
+
+      if (!list) {
+        document.getElementById('no-words').classList.remove('hidden');
+        document.getElementById('play-area').classList.remove('hidden');
+        return;
+      }
+
       document.getElementById('week-label').textContent = `This week: ${list.week_label}`;
-      document.getElementById('practice-link').href = `/practice`;
-      document.getElementById('test-link').href = `/test`;
       document.getElementById('play-area').classList.remove('hidden');
     }
 
     function switchChild() {
-      // Logout and go back to login to select new child
       fetch('/api/logout', { method: 'POST' }).then(() => {
-        window.location.href = '/login';
+        document.getElementById('play-area').classList.add('hidden');
+        document.getElementById('no-words').classList.add('hidden');
+        document.getElementById('child-select-area').classList.remove('hidden');
+        document.body.dataset.theme = 'purple';
       });
     }
 
